@@ -1,0 +1,13 @@
+{
+  "name": "beeper-extension",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter @beeper/extension build",
+    "dev": "bun run --filter @beeper/extension dev"
+  }
+}
