@@ -1,6 +1,6 @@
 export const OFFSCREEN_URL = 'offscreen.html';
 
-export async function ensureOffscreenDocument(): Promise<void> {
+export async function ensureAudio(): Promise<void> {
   const existing = await chrome.runtime.getContexts({
     contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
     documentUrls: [chrome.runtime.getURL(OFFSCREEN_URL)],
@@ -16,3 +16,4 @@ export async function ensureOffscreenDocument(): Promise<void> {
     justification: 'Beep when bad word in YouTube captions',
   });
 }
+

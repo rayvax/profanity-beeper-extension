@@ -1,0 +1,15 @@
+{
+  "name": "@beeper/adapter-chrome-sw",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beeper/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287"
+  }
+}

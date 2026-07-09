@@ -1,5 +1,6 @@
-import { registerWordFoundHandler } from '@beeper/background';
+import { ensureAudio, registerWordFoundHandler } from '@beeper/adapter-chrome-sw';
 
-export default defineBackground(() => {
+export default defineBackground(async () => {
+  await ensureAudio();
   registerWordFoundHandler();
 });

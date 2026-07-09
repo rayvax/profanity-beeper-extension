@@ -14,9 +14,10 @@ Bun monorepo for **Youtube Beeper** — a Manifest V3 Chrome extension that dete
 | `packages/core` | `@beeper/core` | Message protocol (`MessageType` const objects), trigger-word matching |
 | `packages/youtube` | `@beeper/youtube` | Caption DOM observer, `signalPlayer` (no `chrome.*`) |
 | `packages/audio` | `@beeper/audio` | Web Audio beep (no `chrome.*`) |
-| `packages/background` | `@beeper/background` | Service worker handlers, offscreen lifecycle |
+| `adapters/chrome-sw` | `@beeper/adapter-chrome-sw` | Service worker handlers, offscreen lifecycle |
+| `adapters/chrome-content` | `@beeper/adapter-chrome-content` | Content script orchestration |
 
-Business logic lives in `packages/*`. `apps/extension/entrypoints/` only wires `chrome.*` APIs to packages.
+Pure capabilities live in `packages/*` (no `chrome.*`). Chrome extension wiring lives in `adapters/*`. `apps/extension/entrypoints/` only wires WXT entrypoints to adapters.
 
 ## Conventions
 
@@ -24,7 +25,7 @@ Business logic lives in `packages/*`. `apps/extension/entrypoints/` only wires `
 - **No default exports** — named exports only (WXT entrypoints use `export default defineBackground` etc.)
 - **Don't delete existing comments** unless explicitly asked
 - **Message constants** live in `packages/core/src/messages.ts`
-- **SW handlers** live in `packages/background`
+- **SW handlers** live in `adapters/chrome-sw`
 
 ## Commands
 
@@ -39,11 +40,12 @@ Load unpacked extension in Chrome from `apps/extension/dist/chrome-mv3`.
 ## Package dependency graph
 
 ```
-@beeper/extension  →  background, youtube, audio, core
-@beeper/background →  core
-@beeper/youtube    →  (none)
-@beeper/audio      →  (none)
-@beeper/core       →  (none)
+@beeper/extension              →  adapter-chrome-sw, adapter-chrome-content, audio, core
+@beeper/adapter-chrome-sw      →  core
+@beeper/adapter-chrome-content →  core, youtube
+@beeper/youtube                →  (none)
+@beeper/audio                  →  (none)
+@beeper/core                   →  (none)
 ```
 
 ## When adding features
@@ -51,5 +53,5 @@ Load unpacked extension in Chrome from `apps/extension/dist/chrome-mv3`.
 - New message types → `packages/core/src/messages.ts`
 - YouTube DOM logic → `packages/youtube`
 - Audio processing → `packages/audio`
-- Chrome orchestration → `packages/background`
+- Chrome orchestration → `adapters/*`
 - New entrypoint → `apps/extension/entrypoints/` + manifest options in entrypoint or `wxt.config.ts`

@@ -2,7 +2,7 @@ export const triggerWords = [' ', '\u00A0'].flatMap((before) =>
   [' ', '\u00A0'].map((after) => `[${before}__${after}]`),
 );
 
-export function matchesTriggerWord(word: string): boolean {
+export function isTriggerWord(word: string): boolean {
   const caseInsensitiveWord = word.toLowerCase();
   return triggerWords.some((triggerWord) =>
     caseInsensitiveWord.includes(triggerWord.toLowerCase()),

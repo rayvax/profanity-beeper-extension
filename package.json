@@ -4,10 +4,12 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "adapters/*"
   ],
   "scripts": {
     "build": "bun run --filter @beeper/extension build",
-    "dev": "bun run --filter @beeper/extension dev"
+    "dev": "bun run --filter @beeper/extension dev",
+    "postinstall": "bun run --filter @beeper/extension postinstall"
   }
 }

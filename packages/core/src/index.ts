@@ -4,4 +4,4 @@ export type {
   WordFoundMessage,
   PlayBeepMessage,
 } from './messages';
-export { triggerWords, matchesTriggerWord } from './trigger-words';
+export { triggerWords, isTriggerWord } from './trigger-words';

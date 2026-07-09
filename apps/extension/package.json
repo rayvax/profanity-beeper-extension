@@ -9,10 +9,10 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@beeper/adapter-chrome-content": "workspace:*",
+    "@beeper/adapter-chrome-sw": "workspace:*",
     "@beeper/audio": "workspace:*",
-    "@beeper/background": "workspace:*",
-    "@beeper/core": "workspace:*",
-    "@beeper/youtube": "workspace:*"
+    "@beeper/core": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

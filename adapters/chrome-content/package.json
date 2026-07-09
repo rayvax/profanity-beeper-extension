@@ -1,5 +1,5 @@
 {
-  "name": "@beeper/background",
+  "name": "@beeper/adapter-chrome-content",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@beeper/core": "workspace:*"
+    "@beeper/core": "workspace:*",
+    "@beeper/youtube": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287"

@@ -5,14 +5,35 @@
     "": {
       "name": "beeper-extension",
     },
+    "adapters/chrome-content": {
+      "name": "@beeper/adapter-chrome-content",
+      "version": "0.0.0",
+      "dependencies": {
+        "@beeper/core": "workspace:*",
+        "@beeper/youtube": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/chrome": "^0.0.287",
+      },
+    },
+    "adapters/chrome-sw": {
+      "name": "@beeper/adapter-chrome-sw",
+      "version": "0.0.0",
+      "dependencies": {
+        "@beeper/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/chrome": "^0.0.287",
+      },
+    },
     "apps/extension": {
       "name": "@beeper/extension",
       "version": "0.0.0",
       "dependencies": {
+        "@beeper/adapter-chrome-content": "workspace:*",
+        "@beeper/adapter-chrome-sw": "workspace:*",
         "@beeper/audio": "workspace:*",
-        "@beeper/background": "workspace:*",
         "@beeper/core": "workspace:*",
-        "@beeper/youtube": "workspace:*",
       },
       "devDependencies": {
         "@types/chrome": "^0.0.287",
@@ -25,16 +46,6 @@
     "packages/audio": {
       "name": "@beeper/audio",
       "version": "0.0.0",
-    },
-    "packages/background": {
-      "name": "@beeper/background",
-      "version": "0.0.0",
-      "dependencies": {
-        "@beeper/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/chrome": "^0.0.287",
-      },
     },
     "packages/core": {
       "name": "@beeper/core",
@@ -62,9 +73,11 @@
 
     "@babel/types": ["@babel/types@7.29.7", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA=="],
 
-    "@beeper/audio": ["@beeper/audio@workspace:packages/audio"],
+    "@beeper/adapter-chrome-content": ["@beeper/adapter-chrome-content@workspace:adapters/chrome-content"],
 
-    "@beeper/background": ["@beeper/background@workspace:packages/background"],
+    "@beeper/adapter-chrome-sw": ["@beeper/adapter-chrome-sw@workspace:adapters/chrome-sw"],
+
+    "@beeper/audio": ["@beeper/audio@workspace:packages/audio"],
 
     "@beeper/core": ["@beeper/core@workspace:packages/core"],
 
