@@ -14,12 +14,14 @@
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check .",
-    "format:fix": "oxfmt ."
+    "format:fix": "oxfmt .",
+    "typecheck": "bun run --filter '*' typecheck"
   },
   "devDependencies": {
     "oxfmt": "0.58.0",
     "oxlint": "1.73.0",
     "oxlint-plugin-boundaries": "0.1.0",
-    "oxlint-plugin-eslint": "1.73.0"
+    "oxlint-plugin-eslint": "1.73.0",
+    "typescript": "^7.0.2"
   }
 }

@@ -6,13 +6,12 @@
   "scripts": {
     "build": "wxt build",
     "dev": "wxt",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "typecheck": "wxt prepare && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@beeper/adapter-chrome-content": "workspace:*",
-    "@beeper/adapter-chrome-sw": "workspace:*",
-    "@beeper/audio": "workspace:*",
-    "@beeper/core": "workspace:*"
+    "@beeper/adapter-chrome-sw": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

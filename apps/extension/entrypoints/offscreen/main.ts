@@ -1,8 +1,4 @@
-import { playBeep } from '@beeper/audio';
-import { MessageType } from '@beeper/core';
+import { registerCensorAudioHandler } from '@beeper/adapter-chrome-sw';
+import { chromeMessaging } from '../../lib/chrome-messaging';
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MessageType.PLAY_BEEP) {
-    playBeep();
-  }
-});
+registerCensorAudioHandler(chromeMessaging);

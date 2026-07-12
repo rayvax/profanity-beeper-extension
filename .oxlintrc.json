@@ -17,7 +17,7 @@
       "rules": [
         { "from": "package", "allow": [] },
         { "from": "adapter", "allow": ["package"] },
-        { "from": "app", "allow": ["adapter", "package"] }
+        { "from": "app", "allow": ["adapter"] }
       ],
       "default": "disallow"
     }
@@ -43,13 +43,13 @@
   "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md"],
   "overrides": [
     {
-      "files": ["packages/**"],
+      "files": ["packages/**", "adapters/**"],
       "rules": {
         "no-restricted-globals": [
           "error",
           {
             "name": "chrome",
-            "message": "chrome APIs belong in adapters/apps only."
+            "message": "chrome APIs belong in apps/extension only."
           }
         ]
       }

@@ -1,20 +1,21 @@
-import { MessageType } from '@beeper/core';
+import { MessageType, type Messaging } from '@beeper/core';
 import { observeCaptions, signalPlayer } from '@beeper/youtube';
 
 const LOG_PREFIX = '[Caption Observer]';
 
-export function startCaptionBeeper(): void {
+export function startCaptionBeeper(messaging: Messaging): void {
   console.info(`${LOG_PREFIX} injected at`, location.href);
 
   observeCaptions((text) => {
-    chrome.runtime.sendMessage({ type: MessageType.WORD_FOUND, word: text }, (response) => {
-      if (!response?.ok) {
-        return;
-      }
+    void (async () => {
+      const response = await messaging.send({
+        type: MessageType.WORD_CAPTURED,
+        word: text,
+      });
 
-      if (response?.beeped) {
+      if (response.ok && response.censored) {
         signalPlayer();
       }
-    });
+    })();
   });
 }

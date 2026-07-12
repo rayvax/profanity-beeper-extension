@@ -3,5 +3,5 @@
   "singleQuote": true,
   "trailingComma": "all",
   "printWidth": 100,
-  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md"]
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md", "**/package.json"]
 }

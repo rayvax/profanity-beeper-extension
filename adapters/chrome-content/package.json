@@ -6,11 +6,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@beeper/core": "workspace:*",
     "@beeper/youtube": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/chrome": "^0.0.287"
   }
 }
