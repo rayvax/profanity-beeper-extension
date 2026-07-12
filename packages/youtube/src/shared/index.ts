@@ -1,1 +1,1 @@
-export { findElement } from './findElement';
+export { findElement, type FindElementOptions } from './findElement';

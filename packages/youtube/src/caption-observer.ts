@@ -39,13 +39,46 @@ function getNewCaptionPart(previous: string, current: string): string {
   return current;
 }
 
-export async function observeCaptions(onCaptionChange: (text: string) => void): Promise<void> {
-  let lastText = '';
+export type CaptionSession = {
+  destroy: () => void;
+  root: Element;
+};
 
-  const root = await findElement(CaptionSelector.ROOT);
+export type CreateCaptionSessionOptions = {
+  maxWaitMs?: number;
+  signal?: AbortSignal;
+  onDetach?: () => void;
+};
+
+export async function createCaptionSession(
+  onCaptionChange: (text: string) => void,
+  options?: CreateCaptionSessionOptions,
+): Promise<CaptionSession | null> {
+  const root = await findElement(CaptionSelector.ROOT, {
+    maxWaitMs: options?.maxWaitMs,
+    signal: options?.signal,
+  });
+
+  if (!root) {
+    return null;
+  }
+
+  const captionRoot = root;
+  let lastText = '';
+  let destroyed = false;
 
   function handleMutations() {
-    const text = readCurrentCaption(findCaptionSegments(root));
+    if (destroyed) {
+      return;
+    }
+
+    if (!captionRoot.isConnected) {
+      options?.onDetach?.();
+      destroy();
+      return;
+    }
+
+    const text = readCurrentCaption(findCaptionSegments(captionRoot));
     const newPart = getNewCaptionPart(lastText, text);
     if (newPart) {
       lastText = text;
@@ -54,10 +87,21 @@ export async function observeCaptions(onCaptionChange: (text: string) => void): 
   }
 
   const observer = new MutationObserver(handleMutations);
-  observer.observe(root, {
+  observer.observe(captionRoot, {
     childList: true,
     subtree: true,
     characterData: true,
   });
   handleMutations();
+
+  function destroy() {
+    if (destroyed) {
+      return;
+    }
+    destroyed = true;
+    observer.disconnect();
+    lastText = '';
+  }
+
+  return { destroy, root: captionRoot };
 }

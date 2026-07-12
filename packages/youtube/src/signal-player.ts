@@ -3,8 +3,12 @@ import { findElement } from './shared';
 
 export const signalPlayer = async (signalTimeout = 250): Promise<void> => {
   const playerContainer = await findElement(PlayerSelector.CONTAINER);
+  if (!playerContainer) {
+    return;
+  }
+
   const playerVideo = playerContainer.querySelector(PlayerSelector.VIDEO);
-  if (!playerContainer || !playerVideo) {
+  if (!playerVideo) {
     return;
   }
 
