@@ -39,9 +39,7 @@ function getNewCaptionPart(previous: string, current: string): string {
   return current;
 }
 
-export async function observeCaptions(
-  onCaptionChange: (text: string) => void,
-): Promise<void> {
+export async function observeCaptions(onCaptionChange: (text: string) => void): Promise<void> {
   let lastText = '';
 
   const root = await findElement(CaptionSelector.ROOT);

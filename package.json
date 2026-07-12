@@ -1,15 +1,25 @@
 {
   "name": "beeper-extension",
   "private": true,
-  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*",
     "adapters/*"
   ],
+  "type": "module",
   "scripts": {
     "build": "bun run --filter @beeper/extension build",
     "dev": "bun run --filter @beeper/extension dev",
-    "postinstall": "bun run --filter @beeper/extension postinstall"
+    "postinstall": "bun run --filter @beeper/extension postinstall",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --check .",
+    "format:fix": "oxfmt ."
+  },
+  "devDependencies": {
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "oxlint-plugin-boundaries": "0.1.0",
+    "oxlint-plugin-eslint": "1.73.0"
   }
 }

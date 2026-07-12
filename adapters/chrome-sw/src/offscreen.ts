@@ -16,4 +16,3 @@ export async function ensureAudio(): Promise<void> {
     justification: 'Beep when bad word in YouTube captions',
   });
 }
-

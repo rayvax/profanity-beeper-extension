@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "typescript", "oxc", "eslint"],
+  "env": { "browser": true },
+  "jsPlugins": [
+    "oxlint-plugin-boundaries",
+    { "name": "eslint-js", "specifier": "oxlint-plugin-eslint" }
+  ],
+  "settings": {
+    "boundaries": {
+      "workspaceScope": "@beeper/",
+      "elements": [
+        { "type": "package", "pattern": "packages/**" },
+        { "type": "adapter", "pattern": "adapters/**" },
+        { "type": "app", "pattern": "apps/**" }
+      ],
+      "rules": [
+        { "from": "package", "allow": [] },
+        { "from": "adapter", "allow": ["package"] },
+        { "from": "app", "allow": ["adapter", "package"] }
+      ],
+      "default": "disallow"
+    }
+  },
+  "categories": { "correctness": "error" },
+  "rules": {
+    "boundaries/element-types": "error",
+    "boundaries/no-unknown": "error",
+
+    "import/no-default-export": "error",
+    "import/no-cycle": "error",
+
+    "oxc/no-const-enum": "error",
+
+    "eslint-js/no-restricted-syntax": [
+      "error",
+      {
+        "selector": "TSEnumDeclaration",
+        "message": "Use `as const` objects instead of TypeScript enums."
+      }
+    ]
+  },
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md"],
+  "overrides": [
+    {
+      "files": ["packages/**"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "chrome",
+            "message": "chrome APIs belong in adapters/apps only."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/extension/entrypoints/**", "apps/extension/wxt.config.ts"],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    }
+  ]
+}

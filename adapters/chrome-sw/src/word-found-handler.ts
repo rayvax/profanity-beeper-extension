@@ -10,7 +10,7 @@ export function registerWordFoundHandler(): void {
       return sendResponse({ ok: true, beeped: false });
     }
 
-    chrome.runtime.sendMessage({ type: MessageType.PLAY_BEEP })
+    chrome.runtime.sendMessage({ type: MessageType.PLAY_BEEP });
 
     return sendResponse({ ok: true, beeped: true });
   });
