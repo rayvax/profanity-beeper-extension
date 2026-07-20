@@ -1,0 +1,31 @@
+---
+alwaysApply: true
+---
+## Broken Cursor
+
+Here is some rules that fix features, which are broken in Cursor.
+
+### Agent Shell (Windows sandbox)
+
+On Windows, the agent Shell tool can return **no output and no exit status** even when the command ran. Treat that as **unknown**, not success.
+
+**Observed reliable** (consistently return output + exit code in agent Shell):
+- `rg`, `echo`, `pwd`, `Get-Location`, `Write-Output`, `bunx tsc`
+
+**Observed unreliable** (may work in one turn, fail silently in another — do not depend on them):
+- `git` (e.g. `git status` may work, `git --version` may not)
+- `bun` (only the bare binary; `bun run` and bare `bunx` fail silently)
+
+**Observed broken** (no output, no exit status — avoid in agent Shell):
+- `node`, `npm`, `npx`, `tsc`, bare `bunx`, `bun run`, `bun x`
+
+Terminal allowlist is user-managed (Settings → Agents, or `permissions.json`). There is no fixed project-wide list — commands above are empirical notes from this machine, not Cursor defaults.
+
+**Prefer non-shell tools when possible:**
+- File content → Read tool (not `cat`, `Get-Content`, `type`)
+- File write → Write / StrReplace tools
+
+**When Shell returns no exit status:**
+1. Retry with `rg`, Read, or another observed-reliable command
+2. Ask user to run the command in the integrated terminal
+3. If widespread: enable **Settings → Agents → Inline Editing & Terminal → Legacy Terminal Tool**, then Kill All Terminals and restart Cursor

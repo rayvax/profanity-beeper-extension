@@ -72,3 +72,17 @@ Do not consider the job done until all checks pass.
 - Chrome API ports → `apps/extension/lib/`
 - Handler orchestration → `adapters/*`
 - New entrypoint → `apps/extension/entrypoints/` + manifest options in entrypoint or `wxt.config.ts`
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage labels, unchanged from defaults. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
