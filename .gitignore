@@ -1,3 +1,5 @@
 node_modules/
 apps/extension/dist/
 apps/extension/.wxt/
+.scratch
+.tmp-*

@@ -3,5 +3,12 @@
   "singleQuote": true,
   "trailingComma": "all",
   "printWidth": 100,
-  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md", "**/package.json"]
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.wxt/**",
+    "**/.cursor/**",
+    "**/*.md",
+    "**/package.json"
+  ]
 }

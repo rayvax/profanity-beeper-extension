@@ -40,7 +40,7 @@
       }
     ]
   },
-  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/*.md"],
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.wxt/**", "**/.cursor/**", "**/*.md"],
   "overrides": [
     {
       "files": ["packages/**", "adapters/**"],
