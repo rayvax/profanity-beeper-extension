@@ -11,8 +11,8 @@ Bun monorepo for **Youtube Beeper** — a Manifest V3 Chrome extension that dete
 | Path | Package | Role |
 |------|---------|------|
 | `apps/extension` | `@beeper/extension` | WXT app — Chrome API ports (`lib/chrome-*`), thin entrypoint wiring |
-| `packages/core` | `@beeper/core` | Message protocol (`MessageType` const objects), trigger-word matching |
-| `packages/youtube` | `@beeper/youtube` | Caption DOM observer, `signalPlayer` (no `chrome.*`) |
+| `packages/core` | `@beeper/core` | Message protocol, trigger-word matching, transcript seam, player indicator |
+| `packages/youtube` | `@beeper/youtube` | DOM transcript source, `signalPlayer` (no `chrome.*`) |
 | `packages/audio` | `@beeper/audio` | Web Audio beep (no `chrome.*`) |
 | `adapters/chrome-sw` | `@beeper/adapter-chrome-sw` | Service worker handlers, censor audio handler |
 | `adapters/chrome-content` | `@beeper/adapter-chrome-content` | Content script orchestration |
@@ -59,7 +59,7 @@ Do not consider the job done until all checks pass.
 @beeper/extension              →  adapter-chrome-sw, adapter-chrome-content
 @beeper/adapter-chrome-sw      →  core, audio
 @beeper/adapter-chrome-content →  core, youtube
-@beeper/youtube                →  (none)
+@beeper/youtube                →  core
 @beeper/audio                  →  (none)
 @beeper/core                   →  (none)
 ```
