@@ -1,6 +1,9 @@
 import type { CaptionTrack } from './caption-track';
 import { extractCaptionTracks } from './page-bridge';
-import { parseJson3Response, type TimedTextCue } from './parse-json3-cues';
+import { parseJson3Response } from './parse-json3-cues';
+import { parseTimedtextXml } from './parse-timedtext-xml';
+import type { TimedTextCue } from './timed-text-cue';
+import { isBlockedHtmlResponse } from './timedtext-utils';
 
 const LOG_PREFIX = '[TimedText][fetch]';
 const INNERTUBE_PLAYER_URL = 'https://www.youtube.com/youtubei/v1/player';
@@ -26,26 +29,26 @@ export function buildJson3TrackUrl(baseUrl: string): string {
   return url.toString();
 }
 
-function isBlockedHtmlResponse(body: string): boolean {
-  const trimmed = body.trim();
+function parseCaptionResponse(rawBody: string): TimedTextCue[] {
+  const trimmed = rawBody.trim();
 
-  if (!trimmed.startsWith('<')) {
-    return false;
+  if (!trimmed) {
+    return [];
   }
 
-  if (/^<html[\s\S]*<\/body>\s*<\/html>$/i.test(trimmed)) {
-    return true;
+  if (isBlockedHtmlResponse(rawBody)) {
+    return [];
   }
 
-  if (/Sorry\.\.\./i.test(trimmed)) {
-    return true;
+  if (trimmed.startsWith('{')) {
+    return parseJson3Response(rawBody);
   }
 
-  if (/unusual traffic/i.test(trimmed)) {
-    return true;
+  if (trimmed.startsWith('<')) {
+    return parseTimedtextXml(rawBody);
   }
 
-  return false;
+  return [];
 }
 
 export function getInnerTubeApiKey(): string | null {
@@ -126,8 +129,9 @@ export async function fetchCuesForTrack(
   }
 
   const rawBody = await response.text();
+  const trimmedBody = rawBody.trim();
 
-  if (!rawBody.trim()) {
+  if (!trimmedBody) {
     return { cues: [], emptyReason: 'empty-body' };
   }
 
@@ -135,7 +139,7 @@ export async function fetchCuesForTrack(
     return { cues: [], emptyReason: 'blocked-html' };
   }
 
-  const cues = parseJson3Response(rawBody);
+  const cues = parseCaptionResponse(rawBody);
   return {
     cues,
     emptyReason: cues.length ? null : 'parsed-empty',

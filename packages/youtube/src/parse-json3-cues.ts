@@ -1,8 +1,9 @@
-export type TimedTextCue = {
-  startMs: number;
-  endMs: number;
-  text: string;
-};
+import type { TimedTextCue } from './timed-text-cue';
+import {
+  isBlockedHtmlResponse,
+  normalizeTimedTextSegment,
+  splitWordsToTimedCues,
+} from './timedtext-utils';
 
 type Json3Seg = {
   utf8?: string;
@@ -19,34 +20,6 @@ type Json3Response = {
   events?: Json3Event[];
 };
 
-function decodeHtml(text: string): string {
-  const textarea = document.createElement('textarea');
-  textarea.innerHTML = text;
-  return textarea.value;
-}
-
-function isBlockedHtmlResponse(body: string): boolean {
-  const trimmed = body.trim();
-
-  if (!trimmed.startsWith('<')) {
-    return false;
-  }
-
-  if (/^<html[\s\S]*<\/body>\s*<\/html>$/i.test(trimmed)) {
-    return true;
-  }
-
-  if (/Sorry\.\.\./i.test(trimmed)) {
-    return true;
-  }
-
-  if (/unusual traffic/i.test(trimmed)) {
-    return true;
-  }
-
-  return false;
-}
-
 function mergeAdjacentDuplicateCues(cues: TimedTextCue[]): TimedTextCue[] {
   if (cues.length <= 1) {
     return cues;
@@ -58,7 +31,11 @@ function mergeAdjacentDuplicateCues(cues: TimedTextCue[]): TimedTextCue[] {
     const current = cues[i];
     const previous = merged[merged.length - 1];
 
-    if (current.text === previous.text && current.startMs <= previous.endMs + 50) {
+    if (
+      current.text === previous.text &&
+      current.startMs === previous.startMs &&
+      current.startMs <= previous.endMs + 50
+    ) {
       previous.endMs = current.endMs;
       continue;
     }
@@ -67,6 +44,39 @@ function mergeAdjacentDuplicateCues(cues: TimedTextCue[]): TimedTextCue[] {
   }
 
   return merged;
+}
+
+function pushJson3SegCues(
+  cues: TimedTextCue[],
+  eventStartMs: number,
+  eventDurationMs: number,
+  segs: Json3Seg[],
+): void {
+  let previousOffset = 0;
+
+  for (let index = 0; index < segs.length; index++) {
+    const startOffset = segs[index].tOffsetMs ?? (index === 0 ? 0 : previousOffset);
+    previousOffset = startOffset;
+
+    let endOffset: number | null = null;
+    for (let nextIndex = index + 1; nextIndex < segs.length; nextIndex++) {
+      if (segs[nextIndex].tOffsetMs != null) {
+        endOffset = segs[nextIndex].tOffsetMs ?? null;
+        break;
+      }
+    }
+
+    const segEndOffset = endOffset ?? (eventDurationMs > 0 ? eventDurationMs : startOffset + 300);
+    const segStartMs = eventStartMs + startOffset;
+    const segEndMs = eventStartMs + segEndOffset;
+
+    const segText = normalizeTimedTextSegment(segs[index].utf8 ?? '');
+    if (!segText) {
+      continue;
+    }
+
+    cues.push(...splitWordsToTimedCues(segStartMs, segEndMs, segText));
+  }
 }
 
 export function parseJson3ToCues(data: Json3Response): TimedTextCue[] {
@@ -81,25 +91,7 @@ export function parseJson3ToCues(data: Json3Response): TimedTextCue[] {
       continue;
     }
 
-    const text = event.segs
-      .map((seg) => seg.utf8 ?? '')
-      .join('')
-      .replace(/\u200b/g, '')
-      .trim();
-
-    const decodedText = decodeHtml(text)
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    if (!decodedText) {
-      continue;
-    }
-
-    cues.push({
-      startMs: event.tStartMs,
-      endMs: event.tStartMs + event.dDurationMs,
-      text: decodedText,
-    });
+    pushJson3SegCues(cues, event.tStartMs, event.dDurationMs, event.segs);
   }
 
   return mergeAdjacentDuplicateCues(cues);
