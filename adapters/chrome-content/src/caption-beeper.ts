@@ -77,6 +77,10 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
 
       indicator.setState('working');
     } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+
       console.error(`${LOG_PREFIX} bind failed`, error);
       session = null;
       indicator.setState('error');

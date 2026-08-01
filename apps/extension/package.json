@@ -7,7 +7,7 @@
     "build": "wxt build",
     "dev": "wxt",
     "postinstall": "wxt prepare",
-    "typecheck": "wxt prepare && tsc -p tsconfig.json"
+    "type-check": "wxt prepare && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@beeper/adapter-chrome-content": "workspace:*",

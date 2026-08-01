@@ -1,3 +1,4 @@
+import { getCaptionTextDelta } from './caption-text-delta';
 import { CaptionSelector } from './selectors';
 import { findElement } from './shared';
 
@@ -14,29 +15,6 @@ function readCurrentCaption(segments: Element[]): string {
     .map((el) => el.textContent)
     .join(' ')
     .trim();
-}
-
-function getNewCaptionPart(previous: string, current: string): string {
-  if (!previous) {
-    return current;
-  }
-  if (!current) {
-    return '';
-  }
-  if (current.startsWith(previous)) {
-    return current.slice(previous.length).trim();
-  }
-
-  const maxLen = Math.min(previous.length, current.length);
-  for (let len = maxLen; len > 0; len--) {
-    const suffix = previous.slice(-len);
-    const idx = current.indexOf(suffix);
-    if (idx !== -1) {
-      return current.slice(idx + len).trim();
-    }
-  }
-
-  return current;
 }
 
 export type DomCaptionObserverOptions = {
@@ -108,7 +86,7 @@ export class DomCaptionObserver {
     }
 
     const text = readCurrentCaption(findCaptionSegments(this.root));
-    const newPart = getNewCaptionPart(this.lastText, text);
+    const newPart = getCaptionTextDelta(this.lastText, text);
     if (newPart) {
       this.lastText = text;
       this.onCaptionChange(newPart);

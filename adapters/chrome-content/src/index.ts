@@ -1,2 +1,2 @@
 export { startCaptionBeeper } from './caption-beeper';
-export { DomTranscriptSource } from '@beeper/youtube';
+export { DomTranscriptSource, TimedTextTranscriptSource } from '@beeper/youtube';
