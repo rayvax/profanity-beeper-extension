@@ -71,10 +71,10 @@ describe('startCaptionBeeper', () => {
   });
 
   test('transcript chunk sends WORD_CAPTURED through messaging', async () => {
-    const send = mock(async () => ({ ok: true, censored: false }));
+    const send = mock(async () => ({ ok: true as const, censored: false }));
     const source = new FakeTranscriptSource();
 
-    startCaptionBeeper(createMessaging(send), source);
+    startCaptionBeeper(createMessaging(send as Messaging['send']), source);
     await flushMicrotasks();
 
     source.lastBindOptions?.onChunk({ text: 'hello' });
