@@ -144,6 +144,36 @@ describe('startCaptionBeeper', () => {
     expect(statuses).toEqual(['loading', 'working']);
   });
 
+  test('restores playback before reporting an executor failure', async () => {
+    const source = new FakeTranscriptSource();
+    const stop = mock(() => {});
+    const executor: CensorExecutor = {
+      execute: async () => {
+        throw new Error('audio graph failed');
+      },
+      stop,
+    };
+    const statuses: string[] = [];
+    startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source,
+        lexicon: { matches: (token) => token === 'bad' },
+        executor,
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
+    );
+    await flushMicrotasks();
+    stop.mockClear();
+
+    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
+    await flushMicrotasks();
+
+    expect(stop).toHaveBeenCalled();
+    expect(statuses).toContain('error');
+  });
+
   test('bind failure shows error indicator', async () => {
     const source = new FailingTranscriptSource();
     const errorSpy = mock(() => {});

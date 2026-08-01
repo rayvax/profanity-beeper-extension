@@ -13,7 +13,12 @@ export type { MessageTransport, ReplyCallback, MessageHandler, Messaging } from 
 export { triggerWords, isTriggerWord } from './trigger-words';
 export { PlayerIndicator } from './player-indicator';
 export type { PlayerIndicatorState } from './player-indicator';
-export { createCensorLexicon, createCensorRanges, normaliseCensorToken } from './censor';
+export {
+  createCensorLexicon,
+  createCensorRanges,
+  createDefaultRussianCensorLexicon,
+  normaliseCensorToken,
+} from './censor';
 export type { CensorExecutor, CensorLexicon, CensorLexiconOptions, CensorRange } from './censor';
 export type {
   TranscriptChunk,

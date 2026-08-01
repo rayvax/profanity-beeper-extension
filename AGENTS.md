@@ -58,7 +58,7 @@ Do not consider the job done until all checks pass.
 ```
 @beeper/extension              →  adapter-chrome-sw, adapter-chrome-content
 @beeper/adapter-chrome-sw      →  core, audio
-@beeper/adapter-chrome-content →  core, youtube
+@beeper/adapter-chrome-content →  core, youtube, audio
 @beeper/youtube                →  core
 @beeper/audio                  →  (none)
 @beeper/core                   →  (none)

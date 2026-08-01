@@ -17,6 +17,7 @@
       "name": "@beeper/adapter-chrome-content",
       "version": "0.0.0",
       "dependencies": {
+        "@beeper/audio": "workspace:*",
         "@beeper/core": "workspace:*",
         "@beeper/youtube": "workspace:*",
       },

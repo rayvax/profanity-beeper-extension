@@ -7,6 +7,7 @@ export type CensorRange = {
 
 export type CensorExecutor = {
   execute(range: CensorRange): void | Promise<void>;
+  stop?(): void;
 };
 
 export type CensorLexicon = {
@@ -18,6 +19,23 @@ export type CensorLexiconOptions = {
   patterns?: Iterable<RegExp>;
   whitelist?: Iterable<string>;
 };
+
+const DEFAULT_RUSSIAN_CENSOR_WORDS = [
+  'блядь',
+  'блять',
+  'ебать',
+  'ебаный',
+  'ебанутая',
+  'ебануть',
+  'мудак',
+  'пизда',
+  'пиздец',
+  'пиздёж',
+  'сука',
+  'хуй',
+  'хуя',
+  'хуе',
+] as const;
 
 export function normaliseCensorToken(value: string): string {
   return value
@@ -56,6 +74,10 @@ export function createCensorLexicon(options: CensorLexiconOptions = {}): CensorL
       );
     },
   };
+}
+
+export function createDefaultRussianCensorLexicon(): CensorLexicon {
+  return createCensorLexicon({ literalWords: DEFAULT_RUSSIAN_CENSOR_WORDS });
 }
 
 export function createCensorRanges(chunk: TranscriptChunk, lexicon: CensorLexicon): CensorRange[] {

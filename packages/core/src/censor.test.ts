@@ -1,8 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createCensorLexicon, createCensorRanges, normaliseCensorToken } from './index';
+import {
+  createCensorLexicon,
+  createCensorRanges,
+  createDefaultRussianCensorLexicon,
+  normaliseCensorToken,
+} from './index';
 
 describe('Censor lexicon', () => {
+  test('ships a default Russian Censor lexicon', () => {
+    const lexicon = createDefaultRussianCensorLexicon();
+
+    expect(lexicon.matches('Ёбаный')).toBe(true);
+    expect(lexicon.matches('привет')).toBe(false);
+  });
+
   test('normalises a timed word before matching it', () => {
     expect(normaliseCensorToken('  “ЁЖ!”  ')).toBe('еж');
   });

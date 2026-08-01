@@ -4,4 +4,5 @@ export type {
   CensorSessionStatus,
   TimedCensorSessionOptions,
 } from './caption-beeper';
+export { createTimedCaptionSessionOptions } from './timed-caption-session';
 export { DomTranscriptSource } from '@beeper/youtube';

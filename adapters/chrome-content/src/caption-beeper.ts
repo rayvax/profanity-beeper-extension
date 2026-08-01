@@ -59,6 +59,7 @@ export function startCaptionBeeper(
   function unbind() {
     session?.stop();
     session = null;
+    options?.executor.stop?.();
     indicator?.unmount();
     indicator = null;
     abortController?.abort();
@@ -136,6 +137,7 @@ export function startCaptionBeeper(
         }
 
         console.error(`${LOG_PREFIX} censor failed`, error);
+        options.executor.stop?.();
         setStatus('error');
       }
 
