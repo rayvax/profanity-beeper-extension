@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "type-check": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@beeper/audio": "workspace:*",

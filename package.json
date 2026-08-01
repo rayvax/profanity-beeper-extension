@@ -15,7 +15,7 @@
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
-    "typecheck": "bun run --filter '*' typecheck",
+    "type-check": "bun run --filter '*' type-check",
     "test": "bun test"
   },
   "devDependencies": {

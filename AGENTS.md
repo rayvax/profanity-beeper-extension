@@ -33,7 +33,7 @@ Pure capabilities live in `packages/*` (no `chrome.*`). Orchestration lives in `
 bun install          # root — installs all workspaces
 bun run build        # outputs to apps/extension/dist/chrome-mv3
 bun run dev          # WXT dev server with HMR
-bun run typecheck    # TypeScript check across all workspace packages
+bun run type-check   # TypeScript check across all workspace packages
 bun run lint         # oxlint — boundaries, imports, conventions
 bun run lint:fix     # oxlint auto-fix
 bun run format       # oxfmt check
@@ -46,7 +46,7 @@ Load unpacked extension in Chrome from `apps/extension/dist/chrome-mv3`.
 
 After making code changes:
 
-1. Run `bun run typecheck` and `bun run lint` **in parallel**.
+1. Run `bun run type-check` and `bun run lint` **in parallel**.
 2. Fix any errors (`lint:fix` where applicable, otherwise manual fixes).
 3. Repeat steps 1–2 until both pass.
 4. Run `bun run format:fix`, then `bun run format` to verify.
