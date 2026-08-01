@@ -1,12 +1,12 @@
 import type { TranscriptSession, TranscriptSource, TranscriptSourceOptions } from '@beeper/core';
 
-import { getCaptionTextDelta } from './caption-text-delta';
+import { createCueScheduler } from './cue-scheduler';
 import {
   fetchCaptionTracksViaInnerTube,
   fetchCuesForTrack,
   getInnerTubeApiKey,
 } from './fetch-caption-tracks';
-import type { TimedTextCue } from './parse-json3-cues';
+import type { TimedTextCue } from './timed-text-cue';
 import { getCaptionTracksFromPlayerResponse, getVideoIdFromUrl } from './page-bridge';
 import { PlayerSelector } from './selectors';
 import { selectCaptionTrack } from './select-caption-track';
@@ -14,16 +14,8 @@ import { findElement } from './shared';
 
 const LOG_PREFIX = '[TimedText]';
 const VIDEO_WAIT_MS = 10_000;
-
-function findActiveCue(cues: TimedTextCue[], currentTimeMs: number): TimedTextCue | null {
-  for (const cue of cues) {
-    if (currentTimeMs >= cue.startMs && currentTimeMs < cue.endMs) {
-      return cue;
-    }
-  }
-
-  return null;
-}
+const SEEK_BACKWARD_SEC = 0.5;
+const SEEK_FORWARD_SEC = 1;
 
 async function resolveCaptionCues(videoId: string, signal?: AbortSignal): Promise<TimedTextCue[]> {
   let tracks = getCaptionTracksFromPlayerResponse();
@@ -97,10 +89,15 @@ export class TimedTextTranscriptSource implements TranscriptSource {
     }
 
     const videoElement = video as HTMLVideoElement;
-    let lastEmittedText = '';
-    let lastCueStartMs = -1;
-    let lastTimeSec = 0;
+    let lastTimeSec = videoElement.currentTime;
     let destroyed = false;
+
+    const scheduler = createCueScheduler({
+      cues,
+      getCurrentTimeMs: () => videoElement.currentTime * 1000,
+      isPaused: () => videoElement.paused,
+      onChunk: options.onChunk,
+    });
 
     const onTimeUpdate = () => {
       if (destroyed) {
@@ -110,35 +107,37 @@ export class TimedTextTranscriptSource implements TranscriptSource {
       if (!videoElement.isConnected) {
         options.onDetach?.();
         destroyed = true;
+        scheduler.stop();
         videoElement.removeEventListener('timeupdate', onTimeUpdate);
+        videoElement.removeEventListener('play', onPlay);
+        videoElement.removeEventListener('pause', onPause);
         return;
       }
 
       const currentTimeSec = videoElement.currentTime;
-      if (currentTimeSec < lastTimeSec - 0.5) {
-        lastEmittedText = '';
-        lastCueStartMs = -1;
+
+      if (
+        currentTimeSec < lastTimeSec - SEEK_BACKWARD_SEC ||
+        currentTimeSec > lastTimeSec + SEEK_FORWARD_SEC
+      ) {
+        scheduler.onSeek();
       }
+
       lastTimeSec = currentTimeSec;
+    };
 
-      const currentTimeMs = currentTimeSec * 1000;
-      const activeCue = findActiveCue(cues, currentTimeMs);
-      if (!activeCue || activeCue.startMs === lastCueStartMs) {
-        return;
-      }
+    const onPlay = () => {
+      scheduler.onPlay();
+    };
 
-      lastCueStartMs = activeCue.startMs;
-      const delta = getCaptionTextDelta(lastEmittedText, activeCue.text);
-      if (!delta) {
-        return;
-      }
-
-      lastEmittedText = activeCue.text;
-      options.onChunk({ text: delta });
+    const onPause = () => {
+      scheduler.onPause();
     };
 
     videoElement.addEventListener('timeupdate', onTimeUpdate);
-    onTimeUpdate();
+    videoElement.addEventListener('play', onPlay);
+    videoElement.addEventListener('pause', onPause);
+    scheduler.start();
 
     return {
       stop: () => {
@@ -146,9 +145,10 @@ export class TimedTextTranscriptSource implements TranscriptSource {
           return;
         }
         destroyed = true;
+        scheduler.stop();
         videoElement.removeEventListener('timeupdate', onTimeUpdate);
-        lastEmittedText = '';
-        lastCueStartMs = -1;
+        videoElement.removeEventListener('play', onPlay);
+        videoElement.removeEventListener('pause', onPause);
       },
     };
   }
