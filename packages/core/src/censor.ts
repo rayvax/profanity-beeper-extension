@@ -20,23 +20,6 @@ export type CensorLexiconOptions = {
   whitelist?: Iterable<string>;
 };
 
-const DEFAULT_RUSSIAN_CENSOR_WORDS = [
-  'блядь',
-  'блять',
-  'ебать',
-  'ебаный',
-  'ебанутая',
-  'ебануть',
-  'мудак',
-  'пизда',
-  'пиздец',
-  'пиздёж',
-  'сука',
-  'хуй',
-  'хуя',
-  'хуе',
-] as const;
-
 export function normaliseCensorToken(value: string): string {
   return value
     .normalize('NFKC')
@@ -74,10 +57,6 @@ export function createCensorLexicon(options: CensorLexiconOptions = {}): CensorL
       );
     },
   };
-}
-
-export function createDefaultRussianCensorLexicon(): CensorLexicon {
-  return createCensorLexicon({ literalWords: DEFAULT_RUSSIAN_CENSOR_WORDS });
 }
 
 export function createCensorRanges(chunk: TranscriptChunk, lexicon: CensorLexicon): CensorRange[] {

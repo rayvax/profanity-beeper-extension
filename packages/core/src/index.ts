@@ -1,4 +1,4 @@
-export { MessageType, isMessageOfType } from './messages';
+export { CensorStatus, MessageType, isMessageOfType } from './messages';
 export type {
   MessageMap,
   MessageTypeValue,
@@ -7,19 +7,35 @@ export type {
   ExtensionMessage,
   WordCapturedMessage,
   WordCensoredMessage,
+  CensorStatusValue,
 } from './messages';
 export { createMessaging } from './messaging';
-export type { MessageTransport, ReplyCallback, MessageHandler, Messaging } from './messaging';
+export type {
+  MessageContext,
+  MessageTransport,
+  ReplyCallback,
+  MessageHandler,
+  Messaging,
+} from './messaging';
 export { triggerWords, isTriggerWord } from './trigger-words';
 export { PlayerIndicator } from './player-indicator';
 export type { PlayerIndicatorState } from './player-indicator';
-export {
-  createCensorLexicon,
-  createCensorRanges,
-  createDefaultRussianCensorLexicon,
-  normaliseCensorToken,
-} from './censor';
+export { createCensorLexicon, createCensorRanges, normaliseCensorToken } from './censor';
 export type { CensorExecutor, CensorLexicon, CensorLexiconOptions, CensorRange } from './censor';
+export {
+  CensorEffect,
+  CensorSource,
+  createCensorLexiconFromSettings,
+  createDefaultCensorSettings,
+  createDefaultRussianCensorLexicon,
+  validateCensorSettings,
+} from './settings';
+export type {
+  CensorEffectValue,
+  CensorSettings,
+  CensorSettingsValidation,
+  CensorSourceValue,
+} from './settings';
 export type {
   TranscriptChunk,
   TranscriptSession,

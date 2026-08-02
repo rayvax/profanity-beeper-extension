@@ -9,8 +9,16 @@ import {
 export type MessageTransport = {
   send(message: ExtensionMessage): Promise<unknown>;
   addListener(
-    listener: (message: unknown, sendResponse: (response: unknown) => void) => boolean | void,
+    listener: (
+      message: unknown,
+      context: MessageContext,
+      sendResponse: (response: unknown) => void,
+    ) => boolean | void,
   ): () => void;
+};
+
+export type MessageContext = {
+  tabId?: number;
 };
 
 export type ReplyCallback<T extends MessageTypeValue> =
@@ -19,6 +27,7 @@ export type ReplyCallback<T extends MessageTypeValue> =
 export type MessageHandler<T extends MessageTypeValue> = (
   message: RequestOf<T>,
   reply: ReplyCallback<T>,
+  context: MessageContext,
 ) => boolean | void;
 
 export type Messaging = {
@@ -33,12 +42,12 @@ export function createMessaging(transport: MessageTransport): Messaging {
     },
 
     on<T extends MessageTypeValue>(type: T, handler: MessageHandler<T>): () => void {
-      return transport.addListener((message, sendResponse) => {
+      return transport.addListener((message, context, sendResponse) => {
         if (!isMessageOfType(message, type)) {
           return;
         }
 
-        return handler(message, sendResponse as ReplyCallback<T>);
+        return handler(message, sendResponse as ReplyCallback<T>, context);
       });
     },
   };

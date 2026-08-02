@@ -29,12 +29,20 @@ export type TimedCensorSessionOptions = {
   onStatus?: (status: CensorSessionStatus) => void;
 };
 
-export function startCaptionBeeper(messaging: Messaging, source: TranscriptSource): void;
-export function startCaptionBeeper(messaging: Messaging, options: TimedCensorSessionOptions): void;
+export type CaptionBeeperSession = { stop(): void };
+
+export function startCaptionBeeper(
+  messaging: Messaging,
+  source: TranscriptSource,
+): CaptionBeeperSession;
+export function startCaptionBeeper(
+  messaging: Messaging,
+  options: TimedCensorSessionOptions,
+): CaptionBeeperSession;
 export function startCaptionBeeper(
   messaging: Messaging,
   sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
-): void {
+): CaptionBeeperSession {
   console.info(`${LOG_PREFIX} injected at`, location.href);
 
   let options: TimedCensorSessionOptions | undefined;
@@ -168,6 +176,14 @@ export function startCaptionBeeper(
 
   document.addEventListener('yt-navigate-finish', scheduleRebind);
   void bind();
+
+  return {
+    stop() {
+      clearTimeout(rebindTimer);
+      document.removeEventListener('yt-navigate-finish', scheduleRebind);
+      unbind();
+    },
+  };
 }
 
 function isTimedCensorSessionOptions(

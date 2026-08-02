@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'Youtube Beeper',
     version: '0.0.1',
-    permissions: ['offscreen'],
+    permissions: ['offscreen', 'storage', 'tabs'],
     action: {
       default_title: 'Youtube Beeper',
     },

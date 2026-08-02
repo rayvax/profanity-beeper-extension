@@ -8,6 +8,8 @@ export type BeepCensorExecutor = {
   stop(): void;
 };
 
+export type CensorAudioOptions = { beep?: boolean };
+
 type PlaybackGraph = {
   context: AudioContext;
   media: HTMLMediaElement;
@@ -26,7 +28,9 @@ type ScheduledRange = {
 
 export function createBeepCensorExecutor(
   getMedia: () => HTMLMediaElement | null,
+  options: CensorAudioOptions = {},
 ): BeepCensorExecutor {
+  const beep = options.beep ?? true;
   let graph: PlaybackGraph | undefined;
   const scheduledRanges = new Set<ScheduledRange>();
   let listeningTo: HTMLMediaElement | undefined;
@@ -40,7 +44,7 @@ export function createBeepCensorExecutor(
       return;
     }
 
-    scheduledRanges.forEach((scheduledRange) => scheduleRange(currentGraph, scheduledRange));
+    scheduledRanges.forEach((scheduledRange) => scheduleRange(currentGraph, scheduledRange, beep));
   };
 
   return {
@@ -69,7 +73,7 @@ export function createBeepCensorExecutor(
         scheduledRanges.add(scheduledRange);
 
         if (!media.paused) {
-          scheduleRange(playbackGraph, scheduledRange);
+          scheduleRange(playbackGraph, scheduledRange, beep);
         }
       });
     },
@@ -107,7 +111,7 @@ async function getPlaybackGraph(
   return { context, media, gain, mutedUntil: context.currentTime };
 }
 
-function scheduleRange(graph: PlaybackGraph, scheduledRange: ScheduledRange): void {
+function scheduleRange(graph: PlaybackGraph, scheduledRange: ScheduledRange, beep: boolean): void {
   const { media, range } = { media: graph.media, range: scheduledRange.range };
   if (range.endTime <= media.currentTime) {
     completeRange(scheduledRange);
@@ -116,11 +120,11 @@ function scheduleRange(graph: PlaybackGraph, scheduledRange: ScheduledRange): vo
 
   const delayMs = Math.max(0, ((range.startTime - media.currentTime) / media.playbackRate) * 1_000);
   scheduledRange.timer = setTimeout(() => {
-    startRange(graph, scheduledRange);
+    startRange(graph, scheduledRange, beep);
   }, delayMs);
 }
 
-function startRange(graph: PlaybackGraph, scheduledRange: ScheduledRange): void {
+function startRange(graph: PlaybackGraph, scheduledRange: ScheduledRange, beep: boolean): void {
   const { media, range } = { media: graph.media, range: scheduledRange.range };
 
   try {
@@ -129,20 +133,27 @@ function startRange(graph: PlaybackGraph, scheduledRange: ScheduledRange): void 
       return;
     }
     if (range.startTime > media.currentTime) {
-      scheduleRange(graph, scheduledRange);
+      scheduleRange(graph, scheduledRange, beep);
       return;
     }
 
     const durationSeconds = (range.endTime - media.currentTime) / media.playbackRate;
-    const oscillator = graph.context.createOscillator();
     const startTime = graph.context.currentTime;
     const endTime = startTime + durationSeconds;
-    oscillator.frequency.value = 880;
-    oscillator.connect(graph.context.destination);
-    oscillator.onended = () => completeRange(scheduledRange);
-    oscillator.start(startTime);
-    oscillator.stop(endTime);
-    scheduledRange.oscillator = oscillator;
+    if (beep) {
+      const oscillator = graph.context.createOscillator();
+      oscillator.frequency.value = 880;
+      oscillator.connect(graph.context.destination);
+      oscillator.onended = () => completeRange(scheduledRange);
+      oscillator.start(startTime);
+      oscillator.stop(endTime);
+      scheduledRange.oscillator = oscillator;
+    } else {
+      scheduledRange.timer = setTimeout(
+        () => completeRange(scheduledRange),
+        durationSeconds * 1_000,
+      );
+    }
 
     graph.mutedUntil = Math.max(graph.mutedUntil, endTime);
     graph.gain.gain.cancelScheduledValues(startTime);

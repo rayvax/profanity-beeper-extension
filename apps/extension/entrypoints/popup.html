@@ -29,6 +29,32 @@
     </style>
   </head>
   <body>
-    Hello World
+    <form id="settings">
+      <label
+        >Источник
+        <select name="source">
+          <option value="captions">Субтитры</option>
+          <option value="ml">ML</option>
+        </select></label
+      >
+      <label
+        >Эффект
+        <select name="effect">
+          <option value="beep">Сигнал</option>
+          <option value="silence">Тишина</option>
+        </select></label
+      >
+      <label
+        >Задержка <input name="delaySeconds" type="range" min="0.6" max="3" step="0.1" /><output
+          id="delay"
+        ></output
+      ></label>
+      <label>Дополнительные слова <textarea name="literalAdditions" rows="3"></textarea></label>
+      <label>RegExp (по одному на строку) <textarea name="patterns" rows="3"></textarea></label>
+      <label>Whitelist <textarea name="whitelist" rows="3"></textarea></label>
+      <p id="status"></p>
+      <p id="error" role="alert"></p>
+    </form>
+    <script type="module" src="../lib/popup-ui.ts"></script>
   </body>
 </html>

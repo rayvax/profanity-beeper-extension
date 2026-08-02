@@ -1,15 +1,19 @@
 import { createBeepCensorExecutor } from '@beeper/audio';
-import { createDefaultRussianCensorLexicon } from '@beeper/core';
+import { createCensorLexiconFromSettings, type CensorSettings } from '@beeper/core';
 import { PlayerSelector, YoutubeTimedtextSource } from '@beeper/youtube';
 
 import type { TimedCensorSessionOptions } from './caption-beeper';
 
-export function createTimedCaptionSessionOptions(): TimedCensorSessionOptions {
+export function createTimedCaptionSessionOptions(
+  settings: CensorSettings,
+  onStatus?: TimedCensorSessionOptions['onStatus'],
+): TimedCensorSessionOptions {
   return {
     source: new YoutubeTimedtextSource(),
-    lexicon: createDefaultRussianCensorLexicon(),
-    executor: createBeepCensorExecutor(findPlayerMedia),
+    lexicon: createCensorLexiconFromSettings(settings),
+    executor: createBeepCensorExecutor(findPlayerMedia, { beep: settings.effect === 'beep' }),
     settings: { enabled: true },
+    onStatus,
   };
 }
 
