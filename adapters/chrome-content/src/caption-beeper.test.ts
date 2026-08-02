@@ -51,6 +51,11 @@ class DeferredCensorExecutor implements CensorExecutor {
   }
 }
 
+class ArmableCensorExecutor implements CensorExecutor {
+  readonly arm = mock(async () => {});
+  readonly execute = mock(async () => {});
+}
+
 function createMessaging(sendImpl: Messaging['send']): Messaging {
   return {
     send: sendImpl,
@@ -171,6 +176,55 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(stop).toHaveBeenCalled();
+    expect(statuses).toContain('error');
+  });
+
+  test('waits for an ordinary page interaction before arming ML playback', async () => {
+    const source = new FakeTranscriptSource();
+    const executor = new ArmableCensorExecutor();
+    const statuses: string[] = [];
+    startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source,
+        lexicon: { matches: () => false },
+        executor,
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
+    );
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['loading']);
+    expect(executor.arm).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new Event('pointerdown'));
+    await flushMicrotasks();
+
+    expect(executor.arm).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(['loading', 'working']);
+  });
+
+  test('restores playback and reports an error from speech recognition', async () => {
+    const source = new FakeTranscriptSource();
+    const stop = mock(() => {});
+    const statuses: string[] = [];
+    startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source,
+        lexicon: { matches: () => false },
+        executor: { execute: mock(async () => {}), stop },
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
+    );
+    await flushMicrotasks();
+    stop.mockClear();
+
+    source.lastBindOptions?.onError?.(new Error('recognizer failed'));
+
+    expect(stop).toHaveBeenCalledTimes(1);
     expect(statuses).toContain('error');
   });
 

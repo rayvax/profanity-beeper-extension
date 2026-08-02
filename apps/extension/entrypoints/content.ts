@@ -2,6 +2,7 @@ import {
   createTimedCaptionSessionOptions,
   CensorSource,
   CensorStatus,
+  createMlCensorSessionOptions,
   MessageType,
   startCaptionBeeper,
   type CensorSettings,
@@ -16,21 +17,30 @@ export default defineContentScript({
     const start = (settings: CensorSettings) => {
       session?.stop();
       if (settings.source === CensorSource.ML) {
-        void chromeMessaging.send({
-          type: MessageType.CENSOR_STATUS_UPDATED,
-          status: CensorStatus.ERROR,
-        });
-        return;
+        session = startCaptionBeeper(
+          chromeMessaging,
+          createMlCensorSessionOptions(
+            settings,
+            {
+              modelUrl: chrome.runtime.getURL('model/model.tar.gz'),
+              sandboxUrl: chrome.runtime.getURL('sandbox.html'),
+              workletUrl: chrome.runtime.getURL('audio-worklet.js'),
+            },
+            sendStatus,
+          ),
+        );
+      } else {
+        session = startCaptionBeeper(
+          chromeMessaging,
+          createTimedCaptionSessionOptions(settings, sendStatus),
+        );
       }
-      session = startCaptionBeeper(
-        chromeMessaging,
-        createTimedCaptionSessionOptions(settings, (status) => {
-          void chromeMessaging.send({
-            type: MessageType.CENSOR_STATUS_UPDATED,
-            status: status === 'loading' ? CensorStatus.WAITING : status,
-          });
-        }),
-      );
+    };
+    const sendStatus = (status: 'loading' | 'working' | 'error') => {
+      void chromeMessaging.send({
+        type: MessageType.CENSOR_STATUS_UPDATED,
+        status: status === 'loading' ? CensorStatus.WAITING : status,
+      });
     };
 
     chromeMessaging.on(MessageType.CENSOR_SETTINGS_UPDATED, (message) => start(message.settings));

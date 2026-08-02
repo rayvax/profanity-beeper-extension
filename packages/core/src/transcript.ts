@@ -10,6 +10,7 @@ export type TranscriptSession = {
 
 export type TranscriptSourceOptions = {
   onChunk: (chunk: TranscriptChunk) => void;
+  onError?: (error: unknown) => void;
   signal?: AbortSignal;
   onDetach?: () => void;
 };

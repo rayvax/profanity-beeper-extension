@@ -107,6 +107,11 @@
       return;
     }
 
+    if (msg.type === 'stop' && recognizer) {
+      recognizer = null;
+      return;
+    }
+
     if (msg.type === 'audio' && recognizer) {
       recognizer.acceptWaveformFloat(new Float32Array(msg.pcm), sampleRate);
     }

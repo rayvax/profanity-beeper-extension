@@ -4,6 +4,9 @@ import type {
   SpeechRecognizer,
 } from '@beeper/speech';
 
+export { createVoskSandboxSpeechRecognizer } from './sandbox-recognizer';
+export type { VoskSandboxSpeechRecognizerOptions } from './sandbox-recognizer';
+
 type VoskWorker = {
   postMessage(message: unknown, transfer?: Transferable[]): void;
   addEventListener(type: 'message', listener: (event: MessageEvent) => void): void;

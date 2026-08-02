@@ -1,6 +1,7 @@
 export { playBeep } from './beep';
 export { createBeepCensorExecutor } from './beep-censor-executor';
 export { createDelayedCensorExecutor } from './delayed-censor-executor';
+export { createDelayedCensoredPlayback } from './delayed-censored-playback';
 export type {
   BeepCensorExecutor,
   CensorAudioOptions,
@@ -11,3 +12,9 @@ export type {
   DelayedCensorOptions,
   DelayedCensorRange,
 } from './delayed-censor-executor';
+export type {
+  DelayedCensoredPlayback,
+  DelayedCensoredPlaybackOptions,
+  DelayedCensorRange as DelayedPlaybackCensorRange,
+  PcmAudioInput,
+} from './delayed-censored-playback';

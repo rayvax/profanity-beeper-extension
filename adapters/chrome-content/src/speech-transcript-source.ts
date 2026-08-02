@@ -1,10 +1,11 @@
-import type { SpeechRecognizer, SpeechRecognitionSession } from '@beeper/speech';
+import type { SpeechAudioInput, SpeechRecognizer, SpeechRecognitionSession } from '@beeper/speech';
 import type { TranscriptSession, TranscriptSource, TranscriptSourceOptions } from '@beeper/core';
 
 export class SpeechTranscriptSource implements TranscriptSource {
   constructor(
     private readonly recognizer: SpeechRecognizer,
     private readonly getMedia: () => HTMLMediaElement | null,
+    private readonly audioInput?: SpeechAudioInput,
   ) {}
 
   async bind(options: TranscriptSourceOptions): Promise<TranscriptSession> {
@@ -17,6 +18,7 @@ export class SpeechTranscriptSource implements TranscriptSource {
     let recognition: SpeechRecognitionSession | undefined;
     recognition = await this.recognizer.recognize({
       media,
+      audioInput: this.audioInput,
       signal: options.signal,
       onResult: (result) => {
         if (result.final) {
@@ -25,6 +27,7 @@ export class SpeechTranscriptSource implements TranscriptSource {
       },
       onError: (error) => {
         console.error('[Caption Beeper] speech recognition failed', error);
+        options.onError?.(error);
       },
     });
 

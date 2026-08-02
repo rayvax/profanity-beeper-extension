@@ -59,6 +59,7 @@ export function startCaptionBeeper(
   let abortController: AbortController | null = null;
   let rebindTimer: ReturnType<typeof setTimeout> | undefined;
   let interactionHandler: (() => void) | undefined;
+  let disposeExecutorError: (() => void) | undefined;
 
   function setStatus(status: CensorSessionStatus) {
     indicator?.setState(status);
@@ -74,10 +75,12 @@ export function startCaptionBeeper(
     abortController?.abort();
     abortController = null;
     if (interactionHandler) {
-      document.removeEventListener('click', interactionHandler, true);
+      document.removeEventListener('pointerdown', interactionHandler, true);
       document.removeEventListener('keydown', interactionHandler, true);
       interactionHandler = undefined;
     }
+    disposeExecutorError?.();
+    disposeExecutorError = undefined;
   }
 
   async function bind() {
@@ -116,6 +119,7 @@ export function startCaptionBeeper(
         },
         signal,
         onDetach: scheduleRebind,
+        onError: (error) => failSession(error, controller),
       });
 
       if (signal.aborted || abortController !== controller) {
@@ -125,18 +129,31 @@ export function startCaptionBeeper(
 
       session = boundSession;
       const armableExecutor = getArmableExecutor(options?.executor);
+      const failureAwareExecutor = getFailureAwareExecutor(options?.executor);
+      if (failureAwareExecutor) {
+        disposeExecutorError = failureAwareExecutor.onError((error) =>
+          failSession(error, controller),
+        );
+      }
       if (armableExecutor) {
-        interactionHandler = () => {
-          armableExecutor.arm();
+        const armPlayback = () => {
           if (interactionHandler) {
-            document.removeEventListener('click', interactionHandler, true);
+            document.removeEventListener('pointerdown', interactionHandler, true);
             document.removeEventListener('keydown', interactionHandler, true);
             interactionHandler = undefined;
           }
-          setStatus('working');
+          void Promise.resolve(armableExecutor.arm()).then(
+            () => setStatus('working'),
+            (error: unknown) => failSession(error, controller),
+          );
         };
-        document.addEventListener('click', interactionHandler, true);
-        document.addEventListener('keydown', interactionHandler, true);
+        if (navigator.userActivation?.hasBeenActive) {
+          armPlayback();
+        } else {
+          interactionHandler = armPlayback;
+          document.addEventListener('pointerdown', interactionHandler, true);
+          document.addEventListener('keydown', interactionHandler, true);
+        }
       } else {
         setStatus('working');
       }
@@ -188,6 +205,13 @@ export function startCaptionBeeper(
     }
   }
 
+  function failSession(error: unknown, controller: AbortController) {
+    if (controller.signal.aborted || abortController !== controller) return;
+    console.error(`${LOG_PREFIX} censor failed`, error);
+    options?.executor.stop?.();
+    setStatus('error');
+  }
+
   function scheduleRebind() {
     clearTimeout(rebindTimer);
     rebindTimer = setTimeout(() => {
@@ -207,9 +231,21 @@ export function startCaptionBeeper(
   };
 }
 
-function getArmableExecutor(executor: CensorExecutor | undefined): { arm(): void } | undefined {
+function getArmableExecutor(
+  executor: CensorExecutor | undefined,
+): { arm(): void | Promise<void> } | undefined {
   if (!executor || typeof (executor as { arm?: unknown }).arm !== 'function') return undefined;
   return executor as CensorExecutor & { arm(): void };
+}
+
+function getFailureAwareExecutor(
+  executor: CensorExecutor | undefined,
+): { onError(listener: (error: unknown) => void): () => void } | undefined {
+  if (!executor || typeof (executor as { onError?: unknown }).onError !== 'function')
+    return undefined;
+  return executor as CensorExecutor & {
+    onError(listener: (error: unknown) => void): () => void;
+  };
 }
 
 function isTimedCensorSessionOptions(
