@@ -58,6 +58,7 @@ export function startCaptionBeeper(
   let indicator: PlayerIndicator | null = null;
   let abortController: AbortController | null = null;
   let rebindTimer: ReturnType<typeof setTimeout> | undefined;
+  let interactionHandler: (() => void) | undefined;
 
   function setStatus(status: CensorSessionStatus) {
     indicator?.setState(status);
@@ -72,6 +73,11 @@ export function startCaptionBeeper(
     indicator = null;
     abortController?.abort();
     abortController = null;
+    if (interactionHandler) {
+      document.removeEventListener('click', interactionHandler, true);
+      document.removeEventListener('keydown', interactionHandler, true);
+      interactionHandler = undefined;
+    }
   }
 
   async function bind() {
@@ -118,7 +124,22 @@ export function startCaptionBeeper(
       }
 
       session = boundSession;
-      setStatus('working');
+      const armableExecutor = getArmableExecutor(options?.executor);
+      if (armableExecutor) {
+        interactionHandler = () => {
+          armableExecutor.arm();
+          if (interactionHandler) {
+            document.removeEventListener('click', interactionHandler, true);
+            document.removeEventListener('keydown', interactionHandler, true);
+            interactionHandler = undefined;
+          }
+          setStatus('working');
+        };
+        document.addEventListener('click', interactionHandler, true);
+        document.addEventListener('keydown', interactionHandler, true);
+      } else {
+        setStatus('working');
+      }
     } catch (error) {
       if (signal.aborted || abortController !== controller) {
         return;
@@ -184,6 +205,11 @@ export function startCaptionBeeper(
       unbind();
     },
   };
+}
+
+function getArmableExecutor(executor: CensorExecutor | undefined): { arm(): void } | undefined {
+  if (!executor || typeof (executor as { arm?: unknown }).arm !== 'function') return undefined;
+  return executor as CensorExecutor & { arm(): void };
 }
 
 function isTimedCensorSessionOptions(
