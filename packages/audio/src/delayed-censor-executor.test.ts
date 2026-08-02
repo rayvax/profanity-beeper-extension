@@ -30,4 +30,17 @@ describe('createDelayedCensorExecutor', () => {
 
     await expect(result).rejects.toThrow('Censor executor stopped');
   });
+
+  test('can be armed again after a session stop', async () => {
+    const execute = mock(async () => {});
+    const executor = createDelayedCensorExecutor({ execute }, { delaySeconds: 1 });
+    executor.arm();
+    executor.stop();
+
+    const result = executor.execute({ startTime: 1, endTime: 2 });
+    executor.arm();
+    await result;
+
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
 });

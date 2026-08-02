@@ -39,10 +39,14 @@ export function createDelayedCensorExecutor(
     if (!armed || stopped) return;
     const queued = pending.splice(0);
     queued.forEach(({ range, resolve, reject }) => {
-      void Promise.resolve(executor.execute(shiftRange(range, options.delaySeconds))).then(
-        resolve,
-        reject,
-      );
+      try {
+        void Promise.resolve(executor.execute(shiftRange(range, options.delaySeconds))).then(
+          resolve,
+          reject,
+        );
+      } catch (error) {
+        reject(error);
+      }
     });
   };
 
@@ -64,8 +68,9 @@ export function createDelayedCensorExecutor(
       armed = false;
     },
     stop() {
-      stopped = true;
       pending.splice(0).forEach(({ reject }) => reject(new Error('Censor executor stopped')));
+      stopped = false;
+      armed = false;
       executor.stop?.();
     },
   };
