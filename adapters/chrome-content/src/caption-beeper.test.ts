@@ -104,4 +104,25 @@ describe('startCaptionBeeper', () => {
 
     expect(source.stop).toHaveBeenCalled();
   });
+
+  test('censored response signals player on fixture DOM', async () => {
+    document.body.innerHTML = `
+      <div class="html5-video-player">
+        <video class="video-stream"></video>
+      </div>
+    `;
+
+    const send = mock(async () => ({ ok: true as const, censored: true }));
+    const source = new FakeTranscriptSource();
+
+    startCaptionBeeper(createMessaging(send as Messaging['send']), source);
+    await flushMicrotasks();
+
+    source.lastBindOptions?.onChunk({ text: 'bad' });
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const container = document.querySelector('.html5-video-player') as HTMLElement;
+    expect(container.style.backgroundColor).toBe('red');
+  });
 });
