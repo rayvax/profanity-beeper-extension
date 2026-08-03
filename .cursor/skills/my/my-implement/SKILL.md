@@ -13,3 +13,5 @@ Run typechecking regularly, single test files regularly, and the full test suite
 Once done, use /my-code-review to review the work.
 
 Commit your work to the current branch.
+
+When working from a GitHub issue, run `/update-ticket` after commit to sync labels, AC checkboxes, and comments.
