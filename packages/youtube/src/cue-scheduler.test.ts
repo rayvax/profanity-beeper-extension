@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createCueScheduler } from './cue-scheduler';
+import { CueScheduler } from './cue-scheduler';
 import type { TimedTextCue } from './timed-text-cue';
 
 type PendingTimer = {
@@ -52,13 +52,13 @@ const cues: TimedTextCue[] = [
   { startMs: 5000, endMs: 6000, text: 'again' },
 ];
 
-describe('createCueScheduler', () => {
+describe('CueScheduler', () => {
   test('emits cues in chain at their startMs', () => {
     const timers = createFakeTimers();
     const chunks: string[] = [];
     let paused = false;
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: timers.getNow,
       isPaused: () => paused,
@@ -85,7 +85,7 @@ describe('createCueScheduler', () => {
     timers.setNow(3000);
     const chunks: string[] = [];
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: timers.getNow,
       isPaused: () => false,
@@ -103,7 +103,7 @@ describe('createCueScheduler', () => {
     const timers = createFakeTimers();
     const chunks: string[] = [];
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: timers.getNow,
       isPaused: () => false,
@@ -127,7 +127,7 @@ describe('createCueScheduler', () => {
     const chunks: string[] = [];
     let paused = false;
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: timers.getNow,
       isPaused: () => paused,
@@ -155,7 +155,7 @@ describe('createCueScheduler', () => {
     const timers = createFakeTimers();
     const chunks: string[] = [];
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: timers.getNow,
       isPaused: () => false,

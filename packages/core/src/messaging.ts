@@ -21,25 +21,20 @@ export type MessageHandler<T extends MessageTypeValue> = (
   reply: ReplyCallback<T>,
 ) => boolean | void;
 
-export type Messaging = {
-  send<T extends MessageTypeValue>(message: RequestOf<T>): Promise<ResponseOf<T>>;
-  on<T extends MessageTypeValue>(type: T, handler: MessageHandler<T>): () => void;
-};
+export class Messaging {
+  constructor(private readonly transport: MessageTransport) {}
 
-export function createMessaging(transport: MessageTransport): Messaging {
-  return {
-    send<T extends MessageTypeValue>(message: RequestOf<T>): Promise<ResponseOf<T>> {
-      return transport.send(message as ExtensionMessage) as Promise<ResponseOf<T>>;
-    },
+  send<T extends MessageTypeValue>(message: RequestOf<T>): Promise<ResponseOf<T>> {
+    return this.transport.send(message as ExtensionMessage) as Promise<ResponseOf<T>>;
+  }
 
-    on<T extends MessageTypeValue>(type: T, handler: MessageHandler<T>): () => void {
-      return transport.addListener((message, sendResponse) => {
-        if (!isMessageOfType(message, type)) {
-          return;
-        }
+  on<T extends MessageTypeValue>(type: T, handler: MessageHandler<T>): () => void {
+    return this.transport.addListener((message, sendResponse) => {
+      if (!isMessageOfType(message, type)) {
+        return;
+      }
 
-        return handler(message, sendResponse as ReplyCallback<T>);
-      });
-    },
-  };
+      return handler(message, sendResponse as ReplyCallback<T>);
+    });
+  }
 }
