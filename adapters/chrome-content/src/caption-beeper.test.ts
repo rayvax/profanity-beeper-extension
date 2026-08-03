@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from '
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import {
   MessageType,
-  type Messaging,
+  Messaging,
   type TranscriptSession,
   type TranscriptSource,
   type TranscriptSourceOptions,
@@ -29,11 +29,11 @@ class FailingTranscriptSource implements TranscriptSource {
   }
 }
 
-function createMessaging(sendImpl: Messaging['send']): Messaging {
-  return {
-    send: sendImpl,
-    on: () => () => {},
-  };
+function stubMessaging(sendImpl: Messaging['send']): Messaging {
+  return new Messaging({
+    send: (message) => sendImpl(message as Parameters<Messaging['send']>[0]),
+    addListener: () => () => {},
+  });
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -60,7 +60,7 @@ describe('startCaptionBeeper', () => {
   test('binds injected transcript source on watch page', async () => {
     const source = new FakeTranscriptSource();
     startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+      stubMessaging(async () => ({ ok: true, censored: false })),
       source,
     );
 
@@ -74,7 +74,7 @@ describe('startCaptionBeeper', () => {
     const send = mock(async () => ({ ok: true as const, censored: false }));
     const source = new FakeTranscriptSource();
 
-    startCaptionBeeper(createMessaging(send as Messaging['send']), source);
+    startCaptionBeeper(stubMessaging(send as Messaging['send']), source);
     await flushMicrotasks();
 
     source.lastBindOptions?.onChunk({ text: 'hello' });
@@ -92,7 +92,7 @@ describe('startCaptionBeeper', () => {
 
     console.error = errorSpy;
     startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+      stubMessaging(async () => ({ ok: true, censored: false })),
       source,
     );
     await flushMicrotasks();
@@ -104,7 +104,7 @@ describe('startCaptionBeeper', () => {
   test('unbind stops transcript session on rebind', async () => {
     const source = new FakeTranscriptSource();
     startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+      stubMessaging(async () => ({ ok: true, censored: false })),
       source,
     );
     await flushMicrotasks();

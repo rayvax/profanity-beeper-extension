@@ -1,6 +1,6 @@
-import { createMessaging } from '@beeper/adapter-chrome-sw';
+import { Messaging } from '@beeper/adapter-chrome-sw';
 
-export const chromeMessaging = createMessaging({
+export const chromeMessaging = new Messaging({
   send: (message) => chrome.runtime.sendMessage(message),
   addListener: (listener) => {
     const chromeListener = (

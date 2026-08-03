@@ -23,3 +23,7 @@ _Avoid_: Fallback chain, provider mode
 **Player indicator**:
 On-screen status glyph mounted on the YouTube player. OOP class with explicit states (`loading`, `working`, `error`) — preferred pattern for UI components in this project.
 _Avoid_: Mount helper with inline style mutations
+
+**Stateful components**:
+Classes are the preferred pattern for components that hold mutable state or lifecycle (`Messaging`, `CueScheduler`, `PlayerIndicator`, `TranscriptSource` implementations). Use a factory function only when the object is stateless or a thin wrapper over platform APIs.
+_Avoid_: `create*` factories for stateful objects

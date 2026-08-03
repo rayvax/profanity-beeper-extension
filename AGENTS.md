@@ -21,6 +21,7 @@ Pure capabilities live in `packages/*` (no `chrome.*`). Orchestration lives in `
 
 ## Conventions
 
+- **Prefer classes for stateful components** — lifecycle, mutable state, or multi-method APIs (`Messaging`, `CueScheduler`, `PlayerIndicator`, `TranscriptSource`). Factories are fine for stateless helpers.
 - **No TypeScript `enum`** — use `as const` objects (e.g. `MessageType`, `CaptionSelector`)
 - **No default exports** — named exports only (WXT entrypoints use `export default defineBackground` etc.)
 - **Don't delete existing comments** unless explicitly asked

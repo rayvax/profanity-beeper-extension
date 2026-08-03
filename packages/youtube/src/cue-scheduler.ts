@@ -15,132 +15,141 @@ export type CueSchedulerOptions = {
   clearTimer?: (id: CueSchedulerTimerId) => void;
 };
 
-export type CueScheduler = {
-  start: () => void;
-  stop: () => void;
-  onSeek: () => void;
-  onPlay: () => void;
-  onPause: () => void;
-};
+export class CueScheduler {
+  private readonly cues: TimedTextCue[];
+  private readonly getCurrentTimeMs: () => number;
+  private readonly isPaused: () => boolean;
+  private readonly onChunk: (chunk: CueSchedulerChunk) => void;
+  private readonly setTimer: (fn: () => void, delay: number) => CueSchedulerTimerId;
+  private readonly clearTimer: (id: CueSchedulerTimerId) => void;
 
-export function createCueScheduler(options: CueSchedulerOptions): CueScheduler {
-  const { cues, getCurrentTimeMs, isPaused, onChunk } = options;
-  const setTimer =
-    options.setTimer ??
-    ((fn: () => void, delay: number) => setTimeout(fn, delay) as CueSchedulerTimerId);
-  const clearTimer =
-    options.clearTimer ??
-    ((id: CueSchedulerTimerId) => {
-      clearTimeout(id as ReturnType<typeof setTimeout>);
-    });
+  private destroyed = false;
+  private timerId: CueSchedulerTimerId | undefined;
+  private lastProcessedMs = -1;
+  private nextCueIndex = 0;
 
-  let destroyed = false;
-  let timerId: CueSchedulerTimerId | undefined;
-  let lastProcessedMs = -1;
-  let nextCueIndex = 0;
+  constructor(options: CueSchedulerOptions) {
+    this.cues = options.cues;
+    this.getCurrentTimeMs = options.getCurrentTimeMs;
+    this.isPaused = options.isPaused;
+    this.onChunk = options.onChunk;
+    this.setTimer =
+      options.setTimer ??
+      ((fn: () => void, delay: number) => setTimeout(fn, delay) as CueSchedulerTimerId);
+    this.clearTimer =
+      options.clearTimer ??
+      ((id: CueSchedulerTimerId) => {
+        clearTimeout(id as ReturnType<typeof setTimeout>);
+      });
+  }
 
-  function clearPendingTimer() {
-    if (timerId != null) {
-      clearTimer(timerId);
-      timerId = undefined;
+  start(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.resetPosition();
+    if (!this.isPaused()) {
+      this.scheduleNext();
     }
   }
 
-  function scheduleNext() {
-    if (destroyed) {
+  stop(): void {
+    if (this.destroyed) {
       return;
     }
 
-    clearPendingTimer();
+    this.destroyed = true;
+    this.clearPendingTimer();
+    this.lastProcessedMs = -1;
+    this.nextCueIndex = 0;
+  }
 
-    const currentTimeMs = getCurrentTimeMs();
-
-    while (nextCueIndex < cues.length && cues[nextCueIndex].startMs <= lastProcessedMs) {
-      nextCueIndex++;
-    }
-
-    if (nextCueIndex >= cues.length) {
+  onSeek(): void {
+    if (this.destroyed) {
       return;
     }
 
-    const cue = cues[nextCueIndex];
+    this.clearPendingTimer();
+    this.resetPosition();
+    if (!this.isPaused()) {
+      this.scheduleNext();
+    }
+  }
+
+  onPlay(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    if (!this.isPaused()) {
+      this.scheduleNext();
+    }
+  }
+
+  onPause(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.clearPendingTimer();
+  }
+
+  private clearPendingTimer(): void {
+    if (this.timerId != null) {
+      this.clearTimer(this.timerId);
+      this.timerId = undefined;
+    }
+  }
+
+  private scheduleNext(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.clearPendingTimer();
+
+    const currentTimeMs = this.getCurrentTimeMs();
+
+    while (
+      this.nextCueIndex < this.cues.length &&
+      this.cues[this.nextCueIndex].startMs <= this.lastProcessedMs
+    ) {
+      this.nextCueIndex++;
+    }
+
+    if (this.nextCueIndex >= this.cues.length) {
+      return;
+    }
+
+    const cue = this.cues[this.nextCueIndex];
     const delay = cue.startMs - currentTimeMs;
 
     if (delay <= 0) {
-      if (!isPaused()) {
-        onChunk({ text: cue.text });
+      if (!this.isPaused()) {
+        this.onChunk({ text: cue.text });
       }
-      lastProcessedMs = cue.startMs;
-      nextCueIndex++;
-      scheduleNext();
+      this.lastProcessedMs = cue.startMs;
+      this.nextCueIndex++;
+      this.scheduleNext();
       return;
     }
 
-    timerId = setTimer(() => {
-      timerId = undefined;
-      if (destroyed || isPaused()) {
+    this.timerId = this.setTimer(() => {
+      this.timerId = undefined;
+      if (this.destroyed || this.isPaused()) {
         return;
       }
 
-      onChunk({ text: cue.text });
-      lastProcessedMs = cue.startMs;
-      nextCueIndex++;
-      scheduleNext();
+      this.onChunk({ text: cue.text });
+      this.lastProcessedMs = cue.startMs;
+      this.nextCueIndex++;
+      this.scheduleNext();
     }, delay);
   }
 
-  function resetPosition() {
-    lastProcessedMs = getCurrentTimeMs();
-    nextCueIndex = 0;
+  private resetPosition(): void {
+    this.lastProcessedMs = this.getCurrentTimeMs();
+    this.nextCueIndex = 0;
   }
-
-  return {
-    start: () => {
-      if (destroyed) {
-        return;
-      }
-
-      resetPosition();
-      if (!isPaused()) {
-        scheduleNext();
-      }
-    },
-    stop: () => {
-      if (destroyed) {
-        return;
-      }
-
-      destroyed = true;
-      clearPendingTimer();
-      lastProcessedMs = -1;
-      nextCueIndex = 0;
-    },
-    onSeek: () => {
-      if (destroyed) {
-        return;
-      }
-
-      clearPendingTimer();
-      resetPosition();
-      if (!isPaused()) {
-        scheduleNext();
-      }
-    },
-    onPlay: () => {
-      if (destroyed) {
-        return;
-      }
-
-      if (!isPaused()) {
-        scheduleNext();
-      }
-    },
-    onPause: () => {
-      if (destroyed) {
-        return;
-      }
-
-      clearPendingTimer();
-    },
-  };
 }

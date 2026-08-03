@@ -1,6 +1,6 @@
 import type { TranscriptSession, TranscriptSource, TranscriptSourceOptions } from '@beeper/core';
 
-import { createCueScheduler } from './cue-scheduler';
+import { CueScheduler } from './cue-scheduler';
 import {
   fetchCaptionTracksViaInnerTube,
   fetchCuesForTrack,
@@ -92,7 +92,7 @@ export class TimedTextTranscriptSource implements TranscriptSource {
     let lastTimeSec = videoElement.currentTime;
     let destroyed = false;
 
-    const scheduler = createCueScheduler({
+    const scheduler = new CueScheduler({
       cues,
       getCurrentTimeMs: () => videoElement.currentTime * 1000,
       isPaused: () => videoElement.paused,
