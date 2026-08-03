@@ -1,5 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   MessageType,
   type Messaging,
@@ -10,7 +9,6 @@ import {
 
 import { startCaptionBeeper } from './caption-beeper';
 
-const WATCH_URL = 'https://www.youtube.com/watch?v=test123';
 const INDICATOR_SELECTOR = '[data-beeper-indicator]';
 
 class FakeTranscriptSource implements TranscriptSource {
@@ -45,16 +43,8 @@ function getIndicatorText(): string | undefined {
 }
 
 describe('startCaptionBeeper', () => {
-  beforeAll(() => {
-    GlobalRegistrator.register({ url: WATCH_URL });
-  });
-
   beforeEach(() => {
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
-  });
-
-  afterEach(() => {
-    document.body.innerHTML = '';
   });
 
   test('binds injected transcript source on watch page', async () => {

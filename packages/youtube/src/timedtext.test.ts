@@ -1,5 +1,4 @@
-import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { describe, expect, test } from 'bun:test';
 
 import type { CaptionTrack } from './caption-track';
 import { getCaptionTextDelta } from './caption-text-delta';
@@ -8,18 +7,6 @@ import { parseTimedtextXml } from './parse-timedtext-xml';
 import { selectCaptionTrack } from './select-caption-track';
 
 describe('timedtext helpers', () => {
-  beforeAll(() => {
-    try {
-      GlobalRegistrator.register({ url: 'https://www.youtube.com/watch?v=test123' });
-    } catch {
-      // Happy DOM may already be registered by another test file.
-    }
-  });
-
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
   describe('getCaptionTextDelta', () => {
     test('returns full current when previous empty', () => {
       expect(getCaptionTextDelta('', 'hello world')).toBe('hello world');
