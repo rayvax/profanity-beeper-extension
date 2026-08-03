@@ -27,7 +27,7 @@ export function createFakeTransport(): MessageTransport & { sent: ExtensionMessa
           }
         }
 
-        if (!handled && message.type === MessageType.WORD_CENSORED) {
+        if (!handled && message.type === MessageType.CHUNK_CENSORED) {
           resolve(undefined);
         }
       });
