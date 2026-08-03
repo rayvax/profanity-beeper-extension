@@ -39,6 +39,7 @@ bun run lint         # oxlint — boundaries, imports, conventions
 bun run lint:fix     # oxlint auto-fix
 bun run format       # oxfmt check
 bun run format:fix   # oxfmt apply
+bun run test         # unit tests repo-wide (Bun test + shared happy-dom preload)
 ```
 
 Load unpacked extension in Chrome from `apps/extension/dist/chrome-mv3`.
@@ -47,9 +48,9 @@ Load unpacked extension in Chrome from `apps/extension/dist/chrome-mv3`.
 
 After making code changes:
 
-1. Run `bun run type-check` and `bun run lint` **in parallel**.
+1. Run `bun run type-check`, `bun run lint`, and `bun run test` **in parallel**.
 2. Fix any errors (`lint:fix` where applicable, otherwise manual fixes).
-3. Repeat steps 1–2 until both pass.
+3. Repeat steps 1–2 until all pass.
 4. Run `bun run format:fix`, then `bun run format` to verify.
 
 Do not consider the job done until all checks pass.

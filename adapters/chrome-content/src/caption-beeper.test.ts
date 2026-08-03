@@ -1,5 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   MessageType,
   Messaging,
@@ -10,7 +9,6 @@ import {
 
 import { startCaptionBeeper } from './caption-beeper';
 
-const WATCH_URL = 'https://www.youtube.com/watch?v=test123';
 const INDICATOR_SELECTOR = '[data-beeper-indicator]';
 
 class FakeTranscriptSource implements TranscriptSource {
@@ -45,16 +43,8 @@ function getIndicatorText(): string | undefined {
 }
 
 describe('startCaptionBeeper', () => {
-  beforeAll(() => {
-    GlobalRegistrator.register({ url: WATCH_URL });
-  });
-
   beforeEach(() => {
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
-  });
-
-  afterEach(() => {
-    document.body.innerHTML = '';
   });
 
   test('binds injected transcript source on watch page', async () => {
@@ -113,5 +103,26 @@ describe('startCaptionBeeper', () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).toHaveBeenCalled();
+  });
+
+  test('censored response signals player on fixture DOM', async () => {
+    document.body.innerHTML = `
+      <div class="html5-video-player">
+        <video class="video-stream"></video>
+      </div>
+    `;
+
+    const send = mock(async () => ({ ok: true as const, censored: true }));
+    const source = new FakeTranscriptSource();
+
+    startCaptionBeeper(createMessaging(send as Messaging['send']), source);
+    await flushMicrotasks();
+
+    source.lastBindOptions?.onChunk({ text: 'bad' });
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const container = document.querySelector('.html5-video-player') as HTMLElement;
+    expect(container.style.backgroundColor).toBe('red');
   });
 });
