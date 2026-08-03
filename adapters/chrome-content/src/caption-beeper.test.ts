@@ -115,7 +115,7 @@ describe('startCaptionBeeper', () => {
     const send = mock(async () => ({ ok: true as const, censored: true }));
     const source = new FakeTranscriptSource();
 
-    startCaptionBeeper(createMessaging(send as Messaging['send']), source);
+    startCaptionBeeper(stubMessaging(send as Messaging['send']), source);
     await flushMicrotasks();
 
     source.lastBindOptions?.onChunk({ text: 'bad' });

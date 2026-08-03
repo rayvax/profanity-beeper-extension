@@ -1,10 +1,4 @@
-import {
-  MessageType,
-  createMessaging,
-  type ExtensionMessage,
-  type MessageTransport,
-  type Messaging,
-} from '@beeper/core';
+import { MessageType, Messaging, type ExtensionMessage, type MessageTransport } from '@beeper/core';
 
 export function createFakeTransport(): MessageTransport & { sent: ExtensionMessage[] } {
   const listeners: Array<
@@ -55,5 +49,5 @@ export function createTestMessaging(): {
   transport: ReturnType<typeof createFakeTransport>;
 } {
   const transport = createFakeTransport();
-  return { messaging: createMessaging(transport), transport };
+  return { messaging: new Messaging(transport), transport };
 }
