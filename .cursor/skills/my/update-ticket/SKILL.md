@@ -1,110 +1,132 @@
 ---
 name: update-ticket
-description: Sync a GitHub issue after /my-implement, /my-code-review, or manual QA — frozen contract, append-only comments, label frontier.
-argument-hint: "Issue number; outcome (pass | fix-now | follow-up | scope-change); commit SHA or review gist"
+description: Sync the GitHub issue frontier after implement handoff, follow-up, or human QA — contract frozen, tail append-only.
+argument-hint: "Issue number; outcome (handoff | pass | fix-now | follow-up | scope-change); commit SHA or review gist"
 disable-model-invocation: true
 ---
 
-Update one GitHub issue after `/my-implement`, `/my-code-review`, or manual QA — without turning the issue into a second handoff.
+Sync one GitHub issue after `/my-implement` (**handoff**), human QA (**pass**), `/my-code-review` (human-initiated close), or **follow-up** / **scope-change**.
 
-**Contract** (frozen in the issue body): `## What to build`, `## Blocked by`, original acceptance-criteria wording, any `## Decisions` tables.
+Three regions:
 
-**Append-only** tail: GitHub issue **comments** for session narrative; body may update AC checkbox state and `## Remaining work` only.
+- **Contract** — frozen body sections: `## What to build`, `## Blocked by`, AC wording, `## Decisions`.
+- **Append-only** — session narrative in issue comments; body edits limited to AC checkboxes and `## Remaining work`.
+- **Frontier** — triage labels + unchecked AC; what `/my-implement` reads next.
 
-**Frontier**: triage **labels** + unchecked AC in the body are what the next `/my-implement` reads. Handoffs hold session narrative; the issue holds grab state.
+Tracker ops: [issue-tracker.md](../../../../docs/agents/issue-tracker.md). Labels: [triage-labels.md](../../../../docs/agents/triage-labels.md). New-slice shape: [AGENT-BRIEF.md](../../matt-pocock/engineering/triage/AGENT-BRIEF.md).
 
-Read before editing: [issue-tracker.md](../../../../docs/agents/issue-tracker.md), [triage-labels.md](../../../../docs/agents/triage-labels.md). Follow-up brief shape: [AGENT-BRIEF.md](../../matt-pocock/engineering/triage/AGENT-BRIEF.md).
-
-**All body edits:** write `.tmp-issue-<number>-body.md`, run `gh issue edit <number> --body-file`, verify with `gh issue view <number> --json body`, delete temp file. **All comments:** `.tmp-issue-<number>-comment.md` + `gh issue comment`. Never inline `--body` on PowerShell.
-
-**Completion criterion:** issue read via `gh`; outcome classified; contract sections untouched; every AC checkbox matches reality; triage labels match outcome; blocking edges still correct; no review transcript in the body; parent task-list row synced when present; one new issue comment with date, commit SHA (if any), and ≤5 open bullets when work remains. **No new issue** unless the user explicitly approved the draft in this session.
-
-## 1. Load context
-
-Read the issue the user named (`#<number>`, bare number, or GitHub URL).
+## 1. Load
 
 ```powershell
 gh issue view <number> --json number,title,body,labels,state,comments
 ```
 
-Also read when present:
+Also when present: parent issue (`## Parent` — task-list row only), `.scratch/<feature>/spec.md`, latest handoff under `.tmp/` (verdict + SHA only).
 
-- **Parent issue** linked from `## Parent` — task-list row only
-- **Spec** at `.scratch/<feature>/spec.md` when the feature has local spec — scope truth
-- Latest handoff under `.tmp/` — **do not copy** into the issue; extract verdict + SHA only
+**Done when:** body, labels, comments, and blockers understood.
 
-## 2. Classify outcome
+## 2. Classify
 
 | Outcome | When |
 |---|---|
-| **pass** | All AC met; review axes clean or only non-blocking notes |
-| **fix-now** | Same session will land fixes — defer issue edit until re-review passes |
-| **follow-up** | More work needs a fresh `/my-implement` |
+| **handoff** | `/my-implement` finished — implement + review committed; human must verify before close |
+| **pass** | Human confirmed AC (manual QA, loaded extension, etc.) or user explicitly said close the issue |
+| **fix-now** | Same session lands fixes — defer sync until re-review |
+| **follow-up** | Fresh `/my-implement` needed |
 | **scope-change** | Spec intent shifted — not a checkbox tweak |
 
-## 3. Apply the pattern
+**Done when:** exactly one outcome chosen. **fix-now** → stop; re-run after commit + review.
+
+Implement sessions → **handoff** or **follow-up**, never **pass**. **pass** requires human verification — not agent review alone.
+
+## 3. Apply
+
+### handoff
+
+In order:
+
+1. Body: do **not** mark AC `[x]` — human verifies AC. Refresh `## Remaining work` with a short QA checklist (numbered, behavioral, ≤5 items). Keep **contract** sections verbatim. Run [HYGIENE.md](HYGIENE.md).
+2. Save body via [issue-tracker.md](../../../../docs/agents/issue-tracker.md) temp-file pattern.
+3. Remove `ready-for-agent`. Add `ready-for-human`. Remove any other ready-* label.
+4. Post one comment:
+
+```markdown
+### YYYY-MM-DD — implemented, awaiting human verify
+Commit: `<sha>`
+Review: <one line per axis if reviewed>
+QA: <what human should check — extension load, manual steps, etc.>
+```
+
+5. Do **not** `gh issue close`.
+
+**Done when:** issue open, `ready-for-human` set, no `ready-for-agent`, AC unchecked, exactly one handoff comment posted.
 
 ### pass
 
-1. Check every met AC `[x]` in the body; leave unmet `[ ]` only if intentionally deferred to another issue.
-2. Remove `ready-for-agent` / `ready-for-human` labels. Close: `gh issue close <number>`.
-3. Post a comment:
+**Precondition:** user explicitly verified (manual QA, etc.) or said "close #N". If only implement + review happened, use **handoff**.
+
+In order:
+
+1. Body: mark met AC `[x]`; collapse empty `## Remaining work`; drop stale checklists duplicating checked AC. Run [HYGIENE.md](HYGIENE.md).
+2. Save body via [issue-tracker.md](../../../../docs/agents/issue-tracker.md) temp-file pattern.
+3. Remove `ready-for-agent` and `ready-for-human` labels.
+4. Post one verdict comment:
 
 ```markdown
-### YYYY-MM-DD — implemented + reviewed
+### YYYY-MM-DD — verified + closed
 Commit: `<sha>`
 Verdict: <one line per axis if reviewed>
 ```
 
-4. Remove or collapse **Remaining work** in the body if empty. Delete stale checklists that duplicate checked AC.
+5. `gh issue close <number>`.
+
+**Done when:** issue closed, no ready-* labels, every met AC `[x]`, exactly one verdict comment posted.
 
 ### follow-up (same issue)
 
-1. **Do not** rewrite contract or AC wording.
-2. Add or refresh `## Remaining work` in the body — numbered, behavioral, ≤5 items (no file paths).
-3. Open vs done **only** by checkbox state — not duplicate sections.
-4. Labels: `ready-for-agent` (agent work left) or `ready-for-human` (manual QA only). Remove the other ready label.
-5. Post one comment: what review found, what is still open.
+In order:
+
+1. Body: refresh `## Remaining work` — numbered, behavioral, ≤5 items; update AC checkboxes only. Keep **contract** sections verbatim. Run [HYGIENE.md](HYGIENE.md).
+2. Save body via issue-tracker temp-file pattern.
+3. Set frontier label: `ready-for-agent` (agent work left) or `ready-for-human` (manual QA only); remove the other ready label.
+4. Post one comment — what review found, what stays open.
+
+**Done when:** issue open, correct ready label, **contract** untouched, Remaining work current, one comment posted.
 
 ### follow-up (new issue)
 
-When remaining work is a **tracer bullet** (vertical slice) or outgrew the original contract:
+When remaining work is a **tracer bullet** or outgrew the **contract**:
 
-**Stop — user approval required before any new issue exists.** Present a draft (title, what it delivers, blocked-by, acceptance criteria) and wait for explicit approval. No `gh issue create`, no `/to-tickets` publish, until the user says yes. If they decline, stay on **follow-up (same issue)** or **pass** with deferred items in Remaining work.
+Present a draft (title, delivers, blocked-by, acceptance criteria). Wait for explicit user approval before `gh issue create` or `/to-tickets`. On decline, use **follow-up (same issue)** or **pass** with deferred Remaining work.
 
-After approval only:
+After approval:
 
-1. Close or leave open the current issue per **pass** or **follow-up (same issue)** — never both half-done.
-2. Publish the approved issue via `/to-tickets` shape (native blocking links or `## Blocked by` lines, `ready-for-agent` label).
-3. On the original issue, one comment linking `#<new>` — no pasted review.
+1. Finish current issue via **pass** or **follow-up (same issue)** — one terminal state.
+2. Publish approved slice via `/to-tickets` (blocking links + `ready-for-agent`).
+3. One comment on the original linking `#<new>` — verdict only, no pasted review.
 
-Use a new issue — not contract edits — when: architecture split, scope creep, or review axes disagree on unrelated fixes.
+Prefer a new issue over **contract** edits when: architecture split, scope creep, unrelated fixes across review axes.
+
+**Done when:** current issue terminal, new issue published, link comment posted — or user declined and another branch applied.
 
 ### scope-change
 
-1. Edit `.scratch/<feature>/spec.md` when one exists — not the issue contract.
-2. Propose new slices (same draft shape as **follow-up (new issue)**). **User approval required** before publishing any new issue.
-3. On the affected issue: `wontfix` label, close, comment pointing to spec and replacement issues — only after approved issues exist.
+1. Edit `.scratch/<feature>/spec.md` when present — leave issue **contract** as-is until replacement issues exist.
+2. Propose new slices (same draft as **follow-up (new issue)**); wait for approval before publish.
+3. After approved replacements exist: `wontfix` label, close, comment pointing to spec and `#<new>` issues.
 
-### fix-now
+**Done when:** spec updated, replacements published, affected issue closed with `wontfix`.
 
-Skip issue edit. Re-run after commit + review → **pass** or **follow-up**.
+## 4. Sync parent
 
-## 4. Sync parent index
+When `## Parent` links a split parent with a child task list, update only that child's checkbox or status cell. Parent stays an index — no review prose. Save via issue-tracker temp-file pattern.
 
-When `## Parent` references a split parent issue with a child task list, update **only** that child's checkbox or status cell in the parent body. Parent stays an index — no review prose. Edit parent body via the same temp-file pattern.
+- **handoff** — child row notes verify pending (e.g. status cell `verify`); do not check the child checkbox.
+- **pass** — check the child checkbox or mark done.
+- **follow-up** — row matches child **frontier** label.
 
-## 5. Hygiene checks
+**Done when:** parent row matches child **frontier**, or no parent present.
 
-Before saving, reject these in the issue body:
+## 5. Final check
 
-| Reject | Put it instead |
-|---|---|
-| Full review transcript | Handoff or one-line verdict in a comment |
-| `<details>` review archives | Handoff; keep ≤5 bullets in Remaining work |
-| File paths / line numbers in contract | Handoff or spec |
-| Custom status prose (`qa-pending`, `implemented`) | Triage labels from [triage-labels.md](../../../../docs/agents/triage-labels.md) |
-| `Blocked by` wrong vs actual merge order | Fix dependency edges or comment "implemented out of order; QA on …" |
-| Truth only in handoff/parent, not issue | Labels + AC checkboxes must match code |
-
-**Do not** run `/triage` on issues `/to-tickets` created — they are already agent-ready.
+Every **contract** section verbatim. **Frontier** labels and AC checkboxes match verification state (unchecked until human **pass**). Blocking edges correct. One new comment this run (except **fix-now**). No new issue without user approval this session. **handoff** never closes the issue.
