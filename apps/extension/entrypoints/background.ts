@@ -13,10 +13,11 @@ export default defineBackground(async () => {
     storage: chromeStorage,
     getLocale: getUILanguage,
     onStorageChanged: onMatchConfigStorageChanged,
+    branch: 'test/14',
   });
-
-  await resolver.start();
 
   const matcher = new LiveChunkMatcher(resolver);
   registerChunkCapturedHandler(chromeMessaging, matcher);
+
+  await resolver.start();
 });

@@ -1,4 +1,4 @@
 {
   "patterns": ["\\[\\s__\\s\\]", "\\[\\u00A0__\\u00A0\\]"],
-  "terms": []
+  "terms": ["skill", "skills"]
 }
