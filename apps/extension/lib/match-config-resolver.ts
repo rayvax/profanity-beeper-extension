@@ -42,7 +42,8 @@ export function isMatchConfig(value: unknown): value is MatchConfig {
 }
 
 function normalizeLanguage(locale: string): string {
-  return locale.toLowerCase().split(/[-_]/)[0] ?? 'en';
+  const primary = locale.toLowerCase().split(/[-_]/)[0];
+  return primary && primary.length > 0 ? primary : 'en';
 }
 
 export class MatchConfigResolver {

@@ -115,6 +115,200 @@ describe('MatchConfigResolver', () => {
     expect(resolver.getConfig()).toEqual(remoteConfig);
   });
 
+  test('resolves active language from browser locale primary subtag', async () => {
+    const ruConfig = {
+      patterns: ['\\[\\s__\\s\\]'],
+      terms: ['ru-term'],
+    };
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig, ru: ruConfig } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => 'ru-RU',
+    });
+
+    await resolver.start();
+
+    expect(resolver.getConfig()).toEqual(ruConfig);
+  });
+
+  test('falls back to en remote config when active language file is missing', async () => {
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => 'de-DE',
+    });
+
+    await resolver.start();
+
+    expect(resolver.getConfig()).toEqual(remoteConfig);
+  });
+
+  test('falls back to en when locale has no primary subtag', async () => {
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => '',
+    });
+
+    await resolver.start();
+
+    expect(resolver.getConfig()).toEqual(remoteConfig);
+  });
+
+  test('prefers user override over remote config for active language', async () => {
+    const userOverride = {
+      patterns: [],
+      terms: ['override'],
+    };
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig }, user: { en: userOverride } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => 'en-US',
+    });
+
+    await resolver.start();
+
+    expect(resolver.getConfig()).toEqual(userOverride);
+  });
+
+  test('returns to remote defaults after user override reset', async () => {
+    const userOverride = {
+      patterns: [],
+      terms: ['override'],
+    };
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig }, user: { en: userOverride } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => 'en-US',
+    });
+
+    await resolver.start();
+    expect(resolver.getConfig()).toEqual(userOverride);
+
+    const matchConfig = storage.data.matchConfig as {
+      remote: Record<string, unknown>;
+      user?: Record<string, unknown>;
+    };
+    delete matchConfig.user?.en;
+    if (matchConfig.user && Object.keys(matchConfig.user).length === 0) {
+      delete matchConfig.user;
+    }
+
+    await resolver.reloadFromStorage();
+
+    expect(resolver.getConfig()).toEqual(remoteConfig);
+  });
+
+  test('reloads effective config when storage listener fires', async () => {
+    const userOverride = {
+      patterns: [],
+      terms: ['override'],
+    };
+    const storage = createStorage({
+      matchConfigMeta: { configSha: 'sha-1' },
+      matchConfig: { remote: { en: remoteConfig }, user: { en: userOverride } },
+    });
+    const fetchMock = createFetchMock({
+      '/commits': () =>
+        new Response(JSON.stringify([{ sha: 'sha-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+    let storageListener: (() => void) | undefined;
+
+    const resolver = new MatchConfigResolver({
+      fetch: fetchMock as typeof fetch,
+      storage,
+      getLocale: () => 'en-US',
+      onStorageChanged: (listener) => {
+        storageListener = listener;
+        return () => {
+          storageListener = undefined;
+        };
+      },
+    });
+
+    await resolver.start();
+    expect(resolver.getConfig()).toEqual(userOverride);
+
+    const matchConfig = storage.data.matchConfig as {
+      remote: Record<string, unknown>;
+      user?: Record<string, unknown>;
+    };
+    delete matchConfig.user?.en;
+    if (matchConfig.user && Object.keys(matchConfig.user).length === 0) {
+      delete matchConfig.user;
+    }
+
+    storageListener?.();
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(resolver.getConfig()).toEqual(remoteConfig);
+  });
+
   test('falls back to cached remote config when fetch fails', async () => {
     const cachedConfig = {
       patterns: ['\\[\\s__\\s\\]'],
