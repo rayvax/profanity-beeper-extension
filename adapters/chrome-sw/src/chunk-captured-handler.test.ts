@@ -1,13 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { MessageType } from '@beeper/core';
+import { ChunkMatcher, MessageType } from '@beeper/core';
 
 import { registerChunkCapturedHandler } from './chunk-captured-handler';
+import { staticMatchConfig } from './static-match-config';
 import { createTestMessaging } from './test-helpers';
+
+const matcher = new ChunkMatcher(staticMatchConfig);
 
 describe('registerChunkCapturedHandler', () => {
   test('replies censored false for non-matching chunks', async () => {
     const { messaging } = createTestMessaging();
-    registerChunkCapturedHandler(messaging);
+    registerChunkCapturedHandler(messaging, matcher);
 
     const response = await messaging.send({
       type: MessageType.CHUNK_CAPTURED,
@@ -19,7 +22,7 @@ describe('registerChunkCapturedHandler', () => {
 
   test('replies censored true and sends CHUNK_CENSORED for censor tokens', async () => {
     const { messaging, transport } = createTestMessaging();
-    registerChunkCapturedHandler(messaging);
+    registerChunkCapturedHandler(messaging, matcher);
 
     const response = await messaging.send({
       type: MessageType.CHUNK_CAPTURED,

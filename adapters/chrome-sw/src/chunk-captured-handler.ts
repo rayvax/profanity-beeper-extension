@@ -1,10 +1,13 @@
-import { ChunkMatcher, MessageType, type Messaging } from '@beeper/core';
+import { MessageType, type Messaging } from '@beeper/core';
 
-import { staticMatchConfig } from './static-match-config';
+export type ChunkMatcherLike = {
+  matches(text: string): boolean;
+};
 
-const matcher = new ChunkMatcher(staticMatchConfig);
-
-export function registerChunkCapturedHandler(messaging: Messaging): void {
+export function registerChunkCapturedHandler(
+  messaging: Messaging,
+  matcher: ChunkMatcherLike,
+): void {
   messaging.on(MessageType.CHUNK_CAPTURED, (message, reply) => {
     if (!matcher.matches(message.text)) {
       return reply({ ok: true, censored: false });
