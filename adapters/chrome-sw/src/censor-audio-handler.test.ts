@@ -11,13 +11,13 @@ import { registerCensorAudioHandler } from './censor-audio-handler';
 import { createTestMessaging } from './test-helpers';
 
 describe('registerCensorAudioHandler', () => {
-  test('plays beep when WORD_CENSORED is received', async () => {
+  test('plays beep when CHUNK_CENSORED is received', async () => {
     playBeep.mockClear();
 
     const { messaging } = createTestMessaging();
     registerCensorAudioHandler(messaging);
 
-    await messaging.send({ type: MessageType.WORD_CENSORED });
+    await messaging.send({ type: MessageType.CHUNK_CENSORED, text: '[ __ ]' });
 
     expect(playBeep).toHaveBeenCalledTimes(1);
   });

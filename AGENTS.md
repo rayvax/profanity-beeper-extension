@@ -88,3 +88,7 @@ Five canonical triage labels, unchanged from defaults. See `docs/agents/triage-l
 ### Domain docs
 
 Single-context — root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Branch naming
+
+Feature branches for specs: `docs/agents/branch-naming.md`.
