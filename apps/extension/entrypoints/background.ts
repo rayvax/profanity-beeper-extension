@@ -3,8 +3,8 @@ import { BUNDLED_EN_MATCH_CONFIG } from '../lib/bundled-match-defaults';
 import { getUILanguage } from '../lib/chrome-i18n';
 import { chromeMessaging } from '../lib/chrome-messaging';
 import { ensureAudio } from '../lib/chrome-offscreen';
-import { chromeStorage } from '../lib/chrome-storage';
-import { MatchConfigResolver } from '../lib/match-config-resolver';
+import { chromeStorage, onMatchConfigStorageChanged } from '../lib/chrome-storage';
+import { LiveChunkMatcher, MatchConfigResolver } from '../lib/match-config-resolver';
 
 export default defineBackground(async () => {
   await ensureAudio();
@@ -17,6 +17,7 @@ export default defineBackground(async () => {
   });
 
   await resolver.refresh();
-  const config = await resolver.getEffectiveConfig();
-  registerChunkCapturedHandler(chromeMessaging, config);
+
+  const matcher = await LiveChunkMatcher.create(resolver, onMatchConfigStorageChanged);
+  registerChunkCapturedHandler(chromeMessaging, matcher);
 });

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { MatchConfig } from '@beeper/adapter-chrome-sw';
 
 import type { StoragePort } from './chrome-storage';
-import { MatchConfigResolver } from './match-config-resolver';
+import { LiveChunkMatcher, MatchConfigResolver } from './match-config-resolver';
 
 const cachedRemote: MatchConfig = {
   patterns: ['cached-pattern'],
@@ -169,5 +169,109 @@ describe('MatchConfigResolver', () => {
 
     await resolver.refresh();
     expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
+  });
+
+  test('resolves active language from browser locale primary subtag', async () => {
+    const remoteRu: MatchConfig = { patterns: ['ru-pattern'], terms: ['блять'] };
+    const storage = createMemoryStorage({
+      matchConfigMeta: { configSha: 'sha-same' },
+      matchConfig: {
+        remote: { en: cachedRemote, ru: remoteRu },
+        user: {},
+      },
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
+      storage,
+      getLanguage: () => 'ru-RU',
+    });
+
+    await resolver.refresh();
+    expect(await resolver.getEffectiveConfig()).toEqual(remoteRu);
+  });
+
+  test('falls back to en when locale has no primary subtag', async () => {
+    const storage = createMemoryStorage({
+      matchConfigMeta: { configSha: 'sha-same' },
+      matchConfig: { remote: { en: cachedRemote }, user: {} },
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
+      storage,
+      getLanguage: () => '',
+    });
+
+    await resolver.refresh();
+    expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
+  });
+
+  test('returns to remote defaults after user override reset', async () => {
+    const userConfig: MatchConfig = { patterns: [], terms: ['override-term'] };
+    const storage = createMemoryStorage({
+      matchConfigMeta: { configSha: 'sha-same' },
+      matchConfig: {
+        remote: { en: cachedRemote },
+        user: { en: userConfig },
+      },
+    });
+
+    const resolver = new MatchConfigResolver({
+      fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
+      storage,
+      getLanguage: () => 'en-US',
+    });
+
+    await resolver.refresh();
+    expect(await resolver.getEffectiveConfig()).toEqual(userConfig);
+
+    const stored = (await storage.get(['matchConfig'])) as {
+      matchConfig: { remote: Record<string, MatchConfig>; user: Record<string, MatchConfig> };
+    };
+    delete stored.matchConfig.user.en;
+    await storage.set({ matchConfig: stored.matchConfig });
+
+    expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
+  });
+
+  test('LiveChunkMatcher picks up reset after storage change', async () => {
+    const userConfig: MatchConfig = { patterns: [], terms: ['override-term'] };
+    const storage = createMemoryStorage({
+      matchConfigMeta: { configSha: 'sha-same' },
+      matchConfig: {
+        remote: { en: cachedRemote },
+        user: { en: userConfig },
+      },
+    });
+
+    let notify: (() => void) | undefined;
+    const onStorageChanged = (listener: () => void) => {
+      notify = listener;
+      return () => {
+        notify = undefined;
+      };
+    };
+
+    const resolver = new MatchConfigResolver({
+      fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
+      storage,
+      getLanguage: () => 'en',
+    });
+
+    const matcher = await LiveChunkMatcher.create(resolver, onStorageChanged);
+    expect(matcher.matches('say override-term now')).toBe(true);
+
+    const stored = (await storage.get(['matchConfig'])) as {
+      matchConfig: { remote: Record<string, MatchConfig>; user: Record<string, MatchConfig> };
+    };
+    delete stored.matchConfig.user.en;
+    await storage.set({ matchConfig: stored.matchConfig });
+    expect(notify).toBeDefined();
+    notify?.();
+    await matcher.whenIdle();
+
+    expect(matcher.matches('say override-term now')).toBe(false);
+    expect(matcher.matches('say cached-term now')).toBe(true);
   });
 });

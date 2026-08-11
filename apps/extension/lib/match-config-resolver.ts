@@ -1,4 +1,4 @@
-import type { MatchConfig } from '@beeper/adapter-chrome-sw';
+import { ChunkMatcher, type MatchConfig } from '@beeper/adapter-chrome-sw';
 
 import type { StoragePort } from './chrome-storage';
 
@@ -150,6 +150,43 @@ export class MatchConfigResolver {
     }
     const body: unknown = await response.json();
     return parseMatchConfig(body);
+  }
+}
+
+export class LiveChunkMatcher {
+  private matcher: ChunkMatcher;
+  private readonly resolver: MatchConfigResolver;
+  private pendingReload: Promise<void> = Promise.resolve();
+
+  private constructor(resolver: MatchConfigResolver, matcher: ChunkMatcher) {
+    this.resolver = resolver;
+    this.matcher = matcher;
+  }
+
+  static async create(
+    resolver: MatchConfigResolver,
+    onStorageChanged?: (listener: () => void) => () => void,
+  ): Promise<LiveChunkMatcher> {
+    const live = new LiveChunkMatcher(
+      resolver,
+      new ChunkMatcher(await resolver.getEffectiveConfig()),
+    );
+    onStorageChanged?.(() => {
+      live.pendingReload = live.reload();
+    });
+    return live;
+  }
+
+  async reload(): Promise<void> {
+    this.matcher = new ChunkMatcher(await this.resolver.getEffectiveConfig());
+  }
+
+  async whenIdle(): Promise<void> {
+    await this.pendingReload;
+  }
+
+  matches(text: string): boolean {
+    return this.matcher.matches(text);
   }
 }
 

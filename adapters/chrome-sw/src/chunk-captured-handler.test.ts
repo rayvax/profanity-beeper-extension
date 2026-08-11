@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { MessageType } from '@beeper/core';
+import { ChunkMatcher, MessageType } from '@beeper/core';
 
 import { registerChunkCapturedHandler } from './chunk-captured-handler';
 import { createTestMessaging } from './test-helpers';
@@ -35,7 +35,7 @@ describe('registerChunkCapturedHandler', () => {
 
   test('uses injected MatchConfig for blocked terms', async () => {
     const { messaging, transport } = createTestMessaging();
-    registerChunkCapturedHandler(messaging, { patterns: [], terms: ['damn'] });
+    registerChunkCapturedHandler(messaging, new ChunkMatcher({ patterns: [], terms: ['damn'] }));
 
     const response = await messaging.send({
       type: MessageType.CHUNK_CAPTURED,

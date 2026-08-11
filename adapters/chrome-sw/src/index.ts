@@ -1,4 +1,8 @@
-export { Messaging } from '@beeper/core';
+export { ChunkMatcher, Messaging } from '@beeper/core';
 export type { MatchConfig, MessageTransport } from '@beeper/core';
 export { registerCensorAudioHandler } from './censor-audio-handler';
-export { registerChunkCapturedHandler, STATIC_MATCH_CONFIG } from './chunk-captured-handler';
+export {
+  registerChunkCapturedHandler,
+  STATIC_MATCH_CONFIG,
+  type ChunkMatcherLike,
+} from './chunk-captured-handler';
