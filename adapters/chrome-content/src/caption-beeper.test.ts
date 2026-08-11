@@ -60,7 +60,7 @@ describe('startCaptionBeeper', () => {
     expect(getIndicatorText()).toBe('🧼');
   });
 
-  test('transcript chunk sends WORD_CAPTURED through messaging', async () => {
+  test('transcript chunk sends CHUNK_CAPTURED through messaging', async () => {
     const send = mock(async () => ({ ok: true as const, censored: false }));
     const source = new FakeTranscriptSource();
 
@@ -71,8 +71,8 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(send).toHaveBeenCalledWith({
-      type: MessageType.WORD_CAPTURED,
-      word: 'hello',
+      type: MessageType.CHUNK_CAPTURED,
+      text: 'hello',
     });
   });
 

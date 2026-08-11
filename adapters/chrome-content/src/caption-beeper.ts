@@ -57,8 +57,8 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
         onChunk: (chunk) => {
           void (async () => {
             const response = await messaging.send({
-              type: MessageType.WORD_CAPTURED,
-              word: chunk.text,
+              type: MessageType.CHUNK_CAPTURED,
+              text: chunk.text,
             });
 
             if (response.ok && response.censored) {
