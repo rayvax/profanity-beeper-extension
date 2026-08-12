@@ -1,4 +1,4 @@
 {
   "patterns": ["\\[(?: |\\u00A0)__(?: |\\u00A0)\\]"],
-  "terms": []
+  "terms": ["skill", "skills"]
 }
