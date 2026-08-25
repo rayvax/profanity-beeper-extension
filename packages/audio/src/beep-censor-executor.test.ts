@@ -4,11 +4,13 @@ import { createBeepCensorExecutor } from './beep-censor-executor';
 
 class FakeAudioContext {
   currentTime = 10;
+  state: AudioContextState = 'running';
   destination = {} as AudioDestinationNode;
   readonly gain = {
     gain: {
       cancelScheduledValues: mock(() => {}),
       setValueAtTime: mock(() => {}),
+      linearRampToValueAtTime: mock(() => {}),
     },
     connect: mock(() => {}),
   };
@@ -21,9 +23,18 @@ class FakeAudioContext {
     stop: mock(() => this.oscillator.onended?.()),
   };
   resume = mock(async () => {});
+  close = mock(async () => {});
   createGain = mock(() => this.gain);
   createMediaElementSource = mock(() => this.mediaSource);
   createOscillator = mock(() => this.oscillator);
+}
+
+function createMedia(currentTime: number): HTMLMediaElement {
+  return Object.assign(new EventTarget(), {
+    currentTime,
+    paused: false,
+    playbackRate: 1,
+  }) as HTMLMediaElement;
 }
 
 let originalAudioContext: typeof AudioContext | undefined;
@@ -45,13 +56,10 @@ describe('createBeepCensorExecutor', () => {
   });
 
   test('mutes the media and schedules a beep on the media timeline', async () => {
-    const media = Object.assign(new EventTarget(), {
-      currentTime: 12,
-      paused: false,
-      playbackRate: 1,
-    }) as HTMLMediaElement;
+    const media = createMedia(12);
     const executor = createBeepCensorExecutor(() => media);
 
+    await executor.arm();
     await executor.execute({ startTime: 12, endTime: 14 });
 
     expect(context.mediaSource.connect).toHaveBeenCalledWith(context.gain);
@@ -72,16 +80,81 @@ describe('createBeepCensorExecutor', () => {
   });
 
   test('keeps original audio muted through overlapping ranges', async () => {
-    const media = Object.assign(new EventTarget(), {
-      currentTime: 12,
-      paused: false,
-      playbackRate: 1,
-    }) as HTMLMediaElement;
+    const media = createMedia(12);
     const executor = createBeepCensorExecutor(() => media);
 
+    await executor.arm();
     await executor.execute({ startTime: 12, endTime: 14 });
     await executor.execute({ startTime: 12, endTime: 16 });
 
     expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, 14);
+  });
+
+  test('queues a range until the executor is armed on a user gesture', async () => {
+    const media = createMedia(12);
+    const executor = createBeepCensorExecutor(() => media);
+
+    const executed = executor.execute({ startTime: 12, endTime: 14 });
+    expect(context.createMediaElementSource).not.toHaveBeenCalled();
+
+    await executor.arm();
+    await executed;
+
+    expect(context.oscillator.start).toHaveBeenCalledWith(10);
+    expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 10);
+  });
+
+  test('shares one media source across concurrent arms and executes', async () => {
+    const media = createMedia(12);
+    const executor = createBeepCensorExecutor(() => media);
+
+    executor.execute({ startTime: 12, endTime: 14 });
+    executor.execute({ startTime: 20, endTime: 22 });
+    await Promise.all([executor.arm(), executor.arm()]);
+
+    expect(context.createMediaElementSource).toHaveBeenCalledTimes(1);
+  });
+
+  test('fails open without touching the media while the audio context stays suspended', async () => {
+    context.state = 'suspended';
+    const media = createMedia(12);
+    const executor = createBeepCensorExecutor(() => media);
+
+    await expect(executor.arm()).rejects.toThrow('AudioContext is blocked');
+
+    expect(context.createMediaElementSource).not.toHaveBeenCalled();
+    expect(context.close).toHaveBeenCalled();
+  });
+
+  test('rejects a queued range when stopped before arming', async () => {
+    const media = createMedia(12);
+    const executor = createBeepCensorExecutor(() => media);
+
+    const executed = executor.execute({ startTime: 12, endTime: 14 });
+    executor.stop();
+
+    await expect(executed).rejects.toThrow('Censor executor stopped');
+  });
+
+  test('discards a graph that finishes arming after stop', async () => {
+    let resumeContext: () => void = () => {};
+    context.resume = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          resumeContext = resolve;
+        }),
+    );
+    const media = createMedia(12);
+    const executor = createBeepCensorExecutor(() => media);
+
+    const arming = executor.arm();
+    executor.stop();
+    resumeContext();
+    await arming;
+
+    expect(context.close).toHaveBeenCalled();
+
+    executor.execute({ startTime: 12, endTime: 14 });
+    expect(context.oscillator.start).not.toHaveBeenCalled();
   });
 });

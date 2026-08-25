@@ -2,6 +2,7 @@ import {
   createTimedCaptionSessionOptions,
   CensorSource,
   CensorStatus,
+  createDefaultCensorSettings,
   createMlCensorSessionOptions,
   MessageType,
   startCaptionBeeper,
@@ -44,7 +45,14 @@ export default defineContentScript({
     };
 
     chromeMessaging.on(MessageType.CENSOR_SETTINGS_UPDATED, (message) => start(message.settings));
-    const { settings } = await chromeMessaging.send({ type: MessageType.GET_CENSOR_SETTINGS });
+
+    let settings = createDefaultCensorSettings();
+    try {
+      const response = await chromeMessaging.send({ type: MessageType.GET_CENSOR_SETTINGS });
+      settings = response.settings;
+    } catch (error) {
+      console.error('[Caption Beeper] failed to load Censor settings, using defaults', error);
+    }
     start(settings);
   },
 });

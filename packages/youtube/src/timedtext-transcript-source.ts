@@ -5,6 +5,8 @@ import type {
   TranscriptSourceOptions,
 } from '@beeper/core';
 
+import { PlayerSelector } from './selectors';
+
 type TimedtextSegment = {
   utf8?: unknown;
   tOffsetMs?: unknown;
@@ -21,21 +23,34 @@ type TimedtextResponse = {
 };
 
 export type YoutubeTimedtextSourceOptions = {
-  getTrackUrl?: () => string | undefined;
+  getTrackUrl?: () => string | undefined | Promise<string | undefined>;
   fetch?: typeof globalThis.fetch;
+  getMedia?: () => HTMLMediaElement | null;
+  lookaheadSeconds?: number;
+  pollIntervalMs?: number;
 };
 
+const DEFAULT_LOOKAHEAD_SECONDS = 1.25;
+const DEFAULT_POLL_INTERVAL_MS = 250;
+const SEEK_BACK_TOLERANCE_SECONDS = 0.5;
+
 export class YoutubeTimedtextSource implements TranscriptSource {
-  private readonly getTrackUrl: () => string | undefined;
+  private readonly getTrackUrl: () => string | undefined | Promise<string | undefined>;
   private readonly fetch: typeof globalThis.fetch;
+  private readonly getMedia: () => HTMLMediaElement | null;
+  private readonly lookaheadSeconds: number;
+  private readonly pollIntervalMs: number;
 
   constructor(options: YoutubeTimedtextSourceOptions = {}) {
-    this.getTrackUrl = options.getTrackUrl ?? getCaptionTrackUrlFromPage;
     this.fetch = options.fetch ?? globalThis.fetch;
+    this.getTrackUrl = options.getTrackUrl ?? (() => getCaptionTrackUrlFromPage(this.fetch));
+    this.getMedia = options.getMedia ?? getPlayerMediaFromPage;
+    this.lookaheadSeconds = options.lookaheadSeconds ?? DEFAULT_LOOKAHEAD_SECONDS;
+    this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   }
 
   async bind(options: TranscriptSourceOptions): Promise<TranscriptSession> {
-    const trackUrl = this.getTrackUrl();
+    const trackUrl = await this.getTrackUrl();
     if (!trackUrl) {
       throw new Error('Caption track not found');
     }
@@ -46,25 +61,103 @@ export class YoutubeTimedtextSource implements TranscriptSource {
     }
 
     const payload: unknown = await response.json();
-    const chunks = parseTimedtext(payload);
+    const chunks = parseTimedtext(payload).sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0));
 
-    if (!options.signal?.aborted) {
-      chunks.forEach(options.onChunk);
+    const media = this.getMedia();
+    if (!media) {
+      throw new Error('Player media not found');
     }
 
-    return { stop() {} };
+    // Chunks reach the consumer as media time advances, so the Censor
+    // executor can schedule each range shortly before it plays.
+    let nextIndex = 0;
+    let lastMediaTime = media.currentTime;
+    const emitDueChunks = () => {
+      const now = media.currentTime;
+      if (now < lastMediaTime - SEEK_BACK_TOLERANCE_SECONDS) {
+        nextIndex = chunks.findIndex((chunk) => (chunk.endTime ?? 0) > now);
+        if (nextIndex === -1) {
+          nextIndex = chunks.length;
+        }
+      }
+      lastMediaTime = now;
+
+      // Never emit chunks that already finished playing (bind mid-video,
+      // forward seek): their ranges would only produce stale beeps.
+      while (nextIndex < chunks.length && (chunks[nextIndex].endTime ?? 0) <= now) {
+        nextIndex++;
+      }
+
+      const horizon = now + this.lookaheadSeconds;
+      while (nextIndex < chunks.length && (chunks[nextIndex].startTime ?? 0) <= horizon) {
+        options.onChunk(chunks[nextIndex]);
+        nextIndex++;
+      }
+    };
+
+    const pollTimer = setInterval(emitDueChunks, this.pollIntervalMs);
+    const stop = () => {
+      clearInterval(pollTimer);
+      media.removeEventListener('timeupdate', emitDueChunks);
+      media.removeEventListener('seeked', emitDueChunks);
+    };
+
+    media.addEventListener('timeupdate', emitDueChunks);
+    media.addEventListener('seeked', emitDueChunks);
+    options.signal?.addEventListener('abort', stop, { once: true });
+
+    if (!options.signal?.aborted) {
+      emitDueChunks();
+    } else {
+      stop();
+    }
+
+    return { stop };
   }
 }
 
-function getCaptionTrackUrlFromPage(): string | undefined {
+function getPlayerMediaFromPage(): HTMLMediaElement | null {
+  const media = document.querySelector(PlayerSelector.VIDEO);
+  return media instanceof HTMLMediaElement ? media : null;
+}
+
+// The caption track URL lives in an inline script — but after an SPA
+// navigation the previous video's script stays in the DOM, so an inline
+// track is only trusted when its video id matches the current watch page.
+// Otherwise the current watch page HTML is fetched and scanned the same way.
+async function getCaptionTrackUrlFromPage(
+  fetchFn: typeof globalThis.fetch,
+): Promise<string | undefined> {
+  const pageVideoId = new URLSearchParams(location.search).get('v');
   for (const script of document.scripts) {
     const trackUrl = extractCaptionTrackUrl(script.textContent ?? '');
-    if (trackUrl) {
+    if (trackUrl && isCurrentVideoTrack(trackUrl, pageVideoId)) {
       return trackUrl;
     }
   }
 
-  return undefined;
+  try {
+    const response = await fetchFn(location.href);
+    if (!response.ok) {
+      return undefined;
+    }
+    return extractCaptionTrackUrl(await response.text());
+  } catch {
+    return undefined;
+  }
+}
+
+function isCurrentVideoTrack(trackUrl: string, pageVideoId: string | null): boolean {
+  if (!pageVideoId) {
+    return true;
+  }
+
+  try {
+    const trackVideoId = new URL(trackUrl).searchParams.get('v');
+    return !trackVideoId || trackVideoId === pageVideoId;
+  } catch {
+    return true;
+  }
 }
 
 function extractCaptionTrackUrl(script: string): string | undefined {

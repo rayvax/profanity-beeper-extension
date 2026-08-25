@@ -4,6 +4,7 @@ export type MediaTimelineRange = {
 };
 
 export type BeepCensorExecutor = {
+  arm(): Promise<void>;
   execute(range: MediaTimelineRange): Promise<void>;
   stop(): void;
 };
@@ -32,6 +33,7 @@ export function createBeepCensorExecutor(
 ): BeepCensorExecutor {
   const beep = options.beep ?? true;
   let graph: PlaybackGraph | undefined;
+  let pendingGraph: { media: HTMLMediaElement; promise: Promise<PlaybackGraph> } | undefined;
   const scheduledRanges = new Set<ScheduledRange>();
   let listeningTo: HTMLMediaElement | undefined;
 
@@ -47,19 +49,74 @@ export function createBeepCensorExecutor(
     scheduledRanges.forEach((scheduledRange) => scheduleRange(currentGraph, scheduledRange, beep));
   };
 
+  const listenTo = (media: HTMLMediaElement) => {
+    if (listeningTo === media) {
+      return;
+    }
+
+    detachPlaybackListeners(listeningTo, reschedule);
+    attachPlaybackListeners(media, reschedule);
+    listeningTo = media;
+  };
+
+  const ensureGraph = (media: HTMLMediaElement): Promise<PlaybackGraph> => {
+    if (graph?.media === media) {
+      return Promise.resolve(graph);
+    }
+    if (pendingGraph?.media === media) {
+      return pendingGraph.promise;
+    }
+
+    const entry = { media, promise: undefined as unknown as Promise<PlaybackGraph> };
+    const promise = createPlaybackGraph(graph, media).then(
+      (createdGraph) => {
+        if (pendingGraph === entry) {
+          graph = createdGraph;
+          pendingGraph = undefined;
+        } else {
+          // Stale creation: stopped or superseded mid-flight. Never let it
+          // become the active graph, and release the orphaned AudioContext.
+          void createdGraph.context.close().catch(() => undefined);
+        }
+        return createdGraph;
+      },
+      (error: unknown) => {
+        if (pendingGraph === entry) {
+          pendingGraph = undefined;
+        }
+        throw error;
+      },
+    );
+    entry.promise = promise;
+    pendingGraph = entry;
+    return promise;
+  };
+
   return {
-    async execute(range) {
+    async arm() {
       const media = getMedia();
       if (!media) {
         throw new Error('Player media not found');
       }
 
-      const playbackGraph = await getPlaybackGraph(graph, media);
-      graph = playbackGraph;
-      if (listeningTo !== media) {
-        detachPlaybackListeners(listeningTo, reschedule);
-        attachPlaybackListeners(media, reschedule);
-        listeningTo = media;
+      const playbackGraph = await ensureGraph(media);
+      if (graph !== playbackGraph) {
+        // The graph was discarded as stale (stopped mid-arm); nothing to do.
+        return;
+      }
+      listenTo(media);
+
+      if (!media.paused) {
+        scheduledRanges.forEach((scheduledRange) =>
+          scheduleRange(playbackGraph, scheduledRange, beep),
+        );
+      }
+    },
+
+    async execute(range) {
+      const media = getMedia();
+      if (!media) {
+        throw new Error('Player media not found');
       }
 
       return new Promise<void>((resolve, reject) => {
@@ -72,12 +129,16 @@ export function createBeepCensorExecutor(
         };
         scheduledRanges.add(scheduledRange);
 
-        if (!media.paused) {
-          scheduleRange(playbackGraph, scheduledRange, beep);
+        // Without an armed graph the range waits for a user gesture; routing
+        // media audio through a suspended AudioContext would silence playback.
+        if (graph && !media.paused) {
+          scheduleRange(graph, scheduledRange, beep);
         }
       });
     },
+
     stop() {
+      pendingGraph = undefined;
       detachPlaybackListeners(listeningTo, reschedule);
       listeningTo = undefined;
       scheduledRanges.forEach((scheduledRange) => {
@@ -91,18 +152,18 @@ export function createBeepCensorExecutor(
   };
 }
 
-async function getPlaybackGraph(
+async function createPlaybackGraph(
   existingGraph: PlaybackGraph | undefined,
   media: HTMLMediaElement,
 ): Promise<PlaybackGraph> {
-  if (existingGraph?.media === media) {
-    return existingGraph;
-  }
-
   restoreGain(existingGraph);
 
   const context = new AudioContext();
   await context.resume();
+  if (context.state !== 'running') {
+    await context.close().catch(() => undefined);
+    throw new Error('AudioContext is blocked until a user gesture');
+  }
   const mediaSource = context.createMediaElementSource(media);
   const gain = context.createGain();
   mediaSource.connect(gain);

@@ -7,15 +7,24 @@ import { chromeMessaging } from '../lib/chrome-messaging';
 import { createChromeCensorPorts } from '../lib/chrome-censor-ports';
 import { ensureAudio } from '../lib/chrome-offscreen';
 
-export default defineBackground(async () => {
-  await ensureAudio();
+export default defineBackground(() => {
+  // Listeners must be registered synchronously: a content script message can
+  // wake the worker, and events dispatched before registration are lost.
   registerWordCapturedHandler(chromeMessaging);
   const ports = createChromeCensorPorts();
   registerCensorController(chromeMessaging, ports);
-  const tabs = await chrome.tabs.query({ url: '*://www.youtube.com/*' });
-  await Promise.all(
-    tabs.flatMap((tab) =>
-      tab.id === undefined ? [] : [ports.setActionStatus(tab.id, CensorStatus.WAITING)],
-    ),
-  );
+
+  void (async () => {
+    try {
+      await ensureAudio();
+      const tabs = await chrome.tabs.query({ url: '*://www.youtube.com/*' });
+      await Promise.all(
+        tabs.flatMap((tab) =>
+          tab.id === undefined ? [] : [ports.setActionStatus(tab.id, CensorStatus.WAITING)],
+        ),
+      );
+    } catch (error) {
+      console.error('[Censor] service worker startup failed', error);
+    }
+  })();
 });
