@@ -1,3 +1,5 @@
+import { acquireMediaGraph } from './media-graph';
+
 export type DelayedCensorRange = {
   startTime: number;
   endTime: number;
@@ -70,7 +72,7 @@ export function createDelayedCensoredPlayback(
       if (graph?.media !== media) {
         graph = await createGraph(media, options, listeners);
       } else if (!graph.active) {
-        graph.delay.delayTime.value = options.delaySeconds;
+        setDelay(graph.delay, graph.context, options.delaySeconds);
         graph.active = true;
         graph.mutedUntil = graph.context.currentTime;
         graph.tap = await createTap(graph.context, options.workletUrl, listeners);
@@ -93,8 +95,7 @@ export function createDelayedCensoredPlayback(
       sampleRatePromise = createPendingPromise<number>();
       if (!graph) return;
 
-      graph.tap?.disconnect();
-      graph.tap = undefined;
+      disconnectTap(graph);
       graph.oscillator?.stop();
       graph.oscillator = undefined;
       graph.delay.delayTime.cancelScheduledValues(graph.context.currentTime);
@@ -110,29 +111,38 @@ async function createGraph(
   options: DelayedCensoredPlaybackOptions,
   listeners: Set<(pcm: ArrayBuffer) => void>,
 ): Promise<PlaybackGraph> {
-  const context = new AudioContext();
-  if (context.state === 'suspended') {
-    await context.resume();
-  }
-  const source = context.createMediaElementSource(media);
-  const delay = context.createDelay(5);
-  delay.delayTime.value = options.delaySeconds;
-  const gain = context.createGain();
-  source.connect(delay);
-  delay.connect(gain);
-  gain.connect(context.destination);
+  const shared = await acquireMediaGraph(media);
+  const { context } = shared;
+  setDelay(shared.delay, context, options.delaySeconds);
   const tap = await createTap(context, options.workletUrl, listeners);
-  source.connect(tap);
+  shared.source.connect(tap);
   return {
     context,
     media,
-    source,
-    delay,
-    gain,
+    source: shared.source,
+    delay: shared.delay,
+    gain: shared.gain,
     tap,
     active: true,
     mutedUntil: context.currentTime,
   };
+}
+
+function setDelay(delay: DelayNode, context: AudioContext, seconds: number): void {
+  delay.delayTime.cancelScheduledValues(context.currentTime);
+  delay.delayTime.setValueAtTime(seconds, context.currentTime);
+}
+
+function disconnectTap(graph: PlaybackGraph): void {
+  if (!graph.tap) return;
+  // The tap is fed from the shared source node; drop both ends of the link.
+  try {
+    graph.source.disconnect(graph.tap);
+  } catch {
+    // Already disconnected.
+  }
+  graph.tap.disconnect();
+  graph.tap = undefined;
 }
 
 async function createTap(

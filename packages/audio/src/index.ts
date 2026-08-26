@@ -2,6 +2,8 @@ export { playBeep } from './beep';
 export { createBeepCensorExecutor } from './beep-censor-executor';
 export { createDelayedCensorExecutor } from './delayed-censor-executor';
 export { createDelayedCensoredPlayback } from './delayed-censored-playback';
+export { acquireMediaGraph } from './media-graph';
+export type { SharedMediaGraph } from './media-graph';
 export type {
   BeepCensorExecutor,
   CensorAudioOptions,

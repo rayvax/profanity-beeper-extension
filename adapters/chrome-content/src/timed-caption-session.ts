@@ -4,6 +4,7 @@ import {
   type CensorExecutor,
   type CensorSettings,
 } from '@beeper/core';
+import type { SpeechRecognizer } from '@beeper/speech';
 import { createVoskSandboxSpeechRecognizer } from '@beeper/vosk';
 import {
   createDelayedVideoRenderer,
@@ -18,6 +19,8 @@ export type MlCensorSessionOptions = {
   modelUrl: string;
   sandboxUrl: string;
   workletUrl: string;
+  /** Shared recognizer instance; a new one per session would reload the model. */
+  recognizer?: SpeechRecognizer;
 };
 
 export function createTimedCaptionSessionOptions(
@@ -38,10 +41,12 @@ export function createMlCensorSessionOptions(
   mlOptions: MlCensorSessionOptions,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  const recognizer = createVoskSandboxSpeechRecognizer({
-    modelUrl: mlOptions.modelUrl,
-    sandboxUrl: mlOptions.sandboxUrl,
-  });
+  const recognizer =
+    mlOptions.recognizer ??
+    createVoskSandboxSpeechRecognizer({
+      modelUrl: mlOptions.modelUrl,
+      sandboxUrl: mlOptions.sandboxUrl,
+    });
   const playback = createDelayedCensoredPlayback(findPlayerMedia, {
     delaySeconds: settings.delaySeconds,
     beep: settings.effect === 'beep',

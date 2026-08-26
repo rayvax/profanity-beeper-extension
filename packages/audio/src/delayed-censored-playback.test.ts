@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+import { createBeepCensorExecutor } from './beep-censor-executor';
 import { createDelayedCensoredPlayback } from './delayed-censored-playback';
 
 class FakeAudioContext {
@@ -7,7 +8,7 @@ class FakeAudioContext {
   sampleRate = 48_000;
   state: AudioContextState = 'running';
   destination = {} as AudioDestinationNode;
-  readonly source = { connect: mock(() => {}) };
+  readonly source = { connect: mock(() => {}), disconnect: mock(() => {}) };
   readonly delay = {
     connect: mock(() => {}),
     delayTime: {
@@ -39,6 +40,7 @@ class FakeAudioContext {
   };
   audioWorklet = { addModule: mock(async () => Promise.reject(new Error('no worklet'))) };
   resume = mock(async () => {});
+  close = mock(async () => {});
   createMediaElementSource = mock(() => this.source);
   createDelay = mock(() => this.delay);
   createGain = mock(() => this.gain);
@@ -75,7 +77,7 @@ describe('createDelayedCensoredPlayback', () => {
     await playback.arm();
     await playback.execute({ startTime: 10, endTime: 11 });
 
-    expect(context.delay.delayTime.value).toBe(1.2);
+    expect(context.delay.delayTime.setValueAtTime).toHaveBeenCalledWith(1.2, 10);
     expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(11.05);
     expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(12.36);
     expect(context.oscillator.start.mock.calls[0]?.[0]).toBeCloseTo(11.05);
@@ -95,5 +97,26 @@ describe('createDelayedCensoredPlayback', () => {
 
     expect(context.delay.delayTime.setValueAtTime).toHaveBeenCalledWith(0, 10);
     expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(1, 10);
+  });
+
+  test('reuses the media source when switching from captions to ML', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 10,
+      paused: false,
+      playbackRate: 1,
+    }) as HTMLMediaElement;
+    const captions = createBeepCensorExecutor(() => media);
+    const ml = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      beep: false,
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+
+    await captions.arm();
+    captions.stop();
+    await ml.arm();
+
+    expect(context.createMediaElementSource).toHaveBeenCalledTimes(1);
+    expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(1.2, 10);
   });
 });

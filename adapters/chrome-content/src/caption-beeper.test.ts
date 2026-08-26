@@ -31,6 +31,12 @@ class FailingTranscriptSource implements TranscriptSource {
   }
 }
 
+class AbortedTranscriptSource implements TranscriptSource {
+  async bind(): Promise<TranscriptSession> {
+    throw new DOMException('The operation was aborted', 'AbortError');
+  }
+}
+
 class DeferredTranscriptSource implements TranscriptSource {
   readonly resolvers: Array<(session: TranscriptSession) => void> = [];
 
@@ -241,6 +247,24 @@ describe('startCaptionBeeper', () => {
 
     expect(errorSpy).toHaveBeenCalled();
     expect(getIndicatorText()).toBe('⚠️');
+  });
+
+  test('does not report a navigation abort as a censor error', async () => {
+    const statuses: string[] = [];
+    startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source: new AbortedTranscriptSource(),
+        lexicon: { matches: () => false },
+        executor: { execute: mock(async () => {}) },
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
+    );
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['loading']);
+    expect(getIndicatorText()).not.toBe('⚠️');
   });
 
   test('unbind stops transcript session on rebind', async () => {

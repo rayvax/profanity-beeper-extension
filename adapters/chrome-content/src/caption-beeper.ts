@@ -161,6 +161,10 @@ export function startCaptionBeeper(
       if (signal.aborted || abortController !== controller) {
         return;
       }
+      // Aborted fetches are navigation noise; a rebind follows on its own.
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
 
       console.error(`${LOG_PREFIX} bind failed`, error);
       session = null;

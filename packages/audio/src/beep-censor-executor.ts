@@ -1,3 +1,5 @@
+import { acquireMediaGraph } from './media-graph';
+
 export type MediaTimelineRange = {
   startTime: number;
   endTime: number;
@@ -70,13 +72,11 @@ export function createBeepCensorExecutor(
     const entry = { media, promise: undefined as unknown as Promise<PlaybackGraph> };
     const promise = createPlaybackGraph(graph, media).then(
       (createdGraph) => {
+        // Stale creation (stopped or superseded mid-flight) never becomes the
+        // active graph; the shared media graph stays cached for later sessions.
         if (pendingGraph === entry) {
           graph = createdGraph;
           pendingGraph = undefined;
-        } else {
-          // Stale creation: stopped or superseded mid-flight. Never let it
-          // become the active graph, and release the orphaned AudioContext.
-          void createdGraph.context.close().catch(() => undefined);
         }
         return createdGraph;
       },
@@ -158,18 +158,17 @@ async function createPlaybackGraph(
 ): Promise<PlaybackGraph> {
   restoreGain(existingGraph);
 
-  const context = new AudioContext();
-  await context.resume();
-  if (context.state !== 'running') {
-    await context.close().catch(() => undefined);
-    throw new Error('AudioContext is blocked until a user gesture');
-  }
-  const mediaSource = context.createMediaElementSource(media);
-  const gain = context.createGain();
-  mediaSource.connect(gain);
-  gain.connect(context.destination);
+  const shared = await acquireMediaGraph(media);
+  // Immediate playback never delays; only the delayed ML mode raises this.
+  shared.delay.delayTime.cancelScheduledValues(shared.context.currentTime);
+  shared.delay.delayTime.setValueAtTime(0, shared.context.currentTime);
 
-  return { context, media, gain, mutedUntil: context.currentTime };
+  return {
+    context: shared.context,
+    media,
+    gain: shared.gain,
+    mutedUntil: shared.context.currentTime,
+  };
 }
 
 function scheduleRange(graph: PlaybackGraph, scheduledRange: ScheduledRange, beep: boolean): void {

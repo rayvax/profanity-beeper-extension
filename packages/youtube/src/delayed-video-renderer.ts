@@ -22,7 +22,10 @@ export function createDelayedVideoRenderer(
 
   const canvas = document.createElement('canvas');
   canvas.dataset.beeperDelayedVideo = '';
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+  // Opaque cover: the video element must stay visible, otherwise Chrome stops
+  // presenting frames and requestVideoFrameCallback/drawImage starve.
+  canvas.style.cssText =
+    'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:#000;';
   container.append(canvas);
   const output = canvas.getContext('2d');
   if (!output) {
@@ -30,8 +33,6 @@ export function createDelayedVideoRenderer(
     throw new Error('Delayed video canvas is unavailable');
   }
 
-  const previousVisibility = video.style.visibility;
-  video.style.visibility = 'hidden';
   const frames: BufferedFrame[] = [];
   const pool: HTMLCanvasElement[] = [];
   let running = true;
@@ -97,7 +98,6 @@ export function createDelayedVideoRenderer(
     if (animationRequest !== undefined) cancelAnimationFrame(animationRequest);
     frames.splice(0).forEach((frame) => pool.push(frame.canvas));
     canvas.remove();
-    video.style.visibility = previousVisibility;
   };
 
   requestFrame();

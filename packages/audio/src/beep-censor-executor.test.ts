@@ -14,6 +14,13 @@ class FakeAudioContext {
     },
     connect: mock(() => {}),
   };
+  readonly delay = {
+    connect: mock(() => {}),
+    delayTime: {
+      cancelScheduledValues: mock(() => {}),
+      setValueAtTime: mock(() => {}),
+    },
+  };
   readonly mediaSource = { connect: mock(() => {}) };
   readonly oscillator = {
     connect: mock(() => {}),
@@ -24,6 +31,7 @@ class FakeAudioContext {
   };
   resume = mock(async () => {});
   close = mock(async () => {});
+  createDelay = mock(() => this.delay);
   createGain = mock(() => this.gain);
   createMediaElementSource = mock(() => this.mediaSource);
   createOscillator = mock(() => this.oscillator);
@@ -62,7 +70,8 @@ describe('createBeepCensorExecutor', () => {
     await executor.arm();
     await executor.execute({ startTime: 12, endTime: 14 });
 
-    expect(context.mediaSource.connect).toHaveBeenCalledWith(context.gain);
+    expect(context.mediaSource.connect).toHaveBeenCalledWith(context.delay);
+    expect(context.delay.connect).toHaveBeenCalledWith(context.gain);
     expect(context.oscillator.start).toHaveBeenCalledWith(10);
     expect(context.oscillator.stop).toHaveBeenCalledWith(12);
     expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 10);
@@ -152,7 +161,7 @@ describe('createBeepCensorExecutor', () => {
     resumeContext();
     await arming;
 
-    expect(context.close).toHaveBeenCalled();
+    expect(context.close).not.toHaveBeenCalled();
 
     executor.execute({ startTime: 12, endTime: 14 });
     expect(context.oscillator.start).not.toHaveBeenCalled();

@@ -75,4 +75,64 @@ describe('registerCensorController', () => {
     expect(setActionStatus).toHaveBeenCalledWith(9, CensorStatus.WORKING);
     expect(reply).toHaveBeenCalledWith({ status: CensorStatus.WORKING });
   });
+
+  test('replies with defaults when persisted settings fail to load', async () => {
+    const { handlers, messaging } = createMessagingHarness();
+    registerCensorController(messaging, {
+      load: async () => {
+        throw new Error('storage unavailable');
+      },
+      save: async () => {},
+      broadcast: async () => {},
+      setActionStatus: async () => {},
+    });
+
+    const reply = mock(() => {});
+    handlers.get(MessageType.GET_CENSOR_SETTINGS)!(
+      { type: MessageType.GET_CENSOR_SETTINGS },
+      reply,
+      {},
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(reply).toHaveBeenCalledWith({ settings: createDefaultCensorSettings() });
+  });
+
+  test('replies with an error and keeps current settings when saving fails', async () => {
+    const { handlers, messaging } = createMessagingHarness();
+    const initial = createDefaultCensorSettings();
+    registerCensorController(messaging, {
+      load: async () => initial,
+      save: async () => {
+        throw new Error('storage unavailable');
+      },
+      broadcast: async () => {},
+      setActionStatus: async () => {},
+    });
+
+    const updateReply = mock(() => {});
+    handlers.get(MessageType.UPDATE_CENSOR_SETTINGS)!(
+      {
+        type: MessageType.UPDATE_CENSOR_SETTINGS,
+        settings: { ...initial, delaySeconds: 2 },
+      },
+      updateReply,
+      {},
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const getReply = mock(() => {});
+    handlers.get(MessageType.GET_CENSOR_SETTINGS)!(
+      { type: MessageType.GET_CENSOR_SETTINGS },
+      getReply,
+      {},
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(updateReply).toHaveBeenCalledWith({
+      ok: false,
+      error: 'Failed to save censor settings',
+    });
+    expect(getReply).toHaveBeenCalledWith({ settings: initial });
+  });
 });

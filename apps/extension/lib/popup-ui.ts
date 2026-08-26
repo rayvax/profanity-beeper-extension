@@ -41,17 +41,30 @@ function readSettings(): CensorSettings {
 }
 
 async function main(): Promise<void> {
-  const [{ settings }, [tab]] = await Promise.all([
-    chromeMessaging.send({ type: MessageType.GET_CENSOR_SETTINGS }),
-    chrome.tabs.query({ active: true, currentWindow: true }),
-  ]);
+  let settings: CensorSettings;
+  let tab: chrome.tabs.Tab | undefined;
+  try {
+    const [settingsResponse, [activeTab]] = await Promise.all([
+      chromeMessaging.send({ type: MessageType.GET_CENSOR_SETTINGS }),
+      chrome.tabs.query({ active: true, currentWindow: true }),
+    ]);
+    settings = settingsResponse.settings;
+    tab = activeTab;
+  } catch {
+    error.textContent = 'Нет ответа от фонового скрипта. Перезагрузите расширение.';
+    return;
+  }
   showSettings(settings);
   if (tab?.id !== undefined) {
-    const result = await chromeMessaging.send({
-      type: MessageType.GET_CENSOR_STATUS,
-      tabId: tab.id,
-    });
-    status.textContent = result.status ?? 'waiting';
+    try {
+      const result = await chromeMessaging.send({
+        type: MessageType.GET_CENSOR_STATUS,
+        tabId: tab.id,
+      });
+      status.textContent = result.status ?? 'waiting';
+    } catch {
+      status.textContent = 'waiting';
+    }
   }
   chrome.runtime.onMessage.addListener((message: unknown) => {
     if (
@@ -67,16 +80,20 @@ async function main(): Promise<void> {
   });
 
   form.addEventListener('change', async () => {
-    const result = await chromeMessaging.send({
-      type: MessageType.UPDATE_CENSOR_SETTINGS,
-      settings: readSettings(),
-    });
-    if (!result.ok) {
-      error.textContent = result.error;
-      return;
+    try {
+      const result = await chromeMessaging.send({
+        type: MessageType.UPDATE_CENSOR_SETTINGS,
+        settings: readSettings(),
+      });
+      if (!result.ok) {
+        error.textContent = result.error;
+        return;
+      }
+      error.textContent = '';
+      showSettings(result.settings);
+    } catch {
+      error.textContent = 'Настройки не сохранились: фоновый скрипт не ответил.';
     }
-    error.textContent = '';
-    showSettings(result.settings);
   });
   delayField.addEventListener('input', () => {
     delay.value = `${Number(delayField.value).toFixed(1)} с`;
