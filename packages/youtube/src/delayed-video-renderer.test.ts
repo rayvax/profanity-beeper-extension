@@ -46,10 +46,13 @@ describe('createDelayedVideoRenderer', () => {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-beeper-delayed-video]')!;
 
     expect(video.style.visibility).toBe('visible');
+    expect(video.parentElement?.style.position).toBe('relative');
+    expect(canvas.style.zIndex).toBe('1');
     expect(canvas.style.background).toBe('#000');
 
     renderer.stop();
     expect(canvas.isConnected).toBeFalse();
     expect(video.style.visibility).toBe('visible');
+    expect(video.parentElement?.style.position).toBe('');
   });
 });

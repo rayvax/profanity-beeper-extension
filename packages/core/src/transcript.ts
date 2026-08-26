@@ -2,6 +2,7 @@ export type TranscriptChunk = {
   text: string;
   startTime?: number;
   endTime?: number;
+  final?: boolean;
 };
 
 export type TranscriptSession = {

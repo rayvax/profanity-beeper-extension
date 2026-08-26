@@ -136,19 +136,25 @@ describe('startCaptionBeeper', () => {
     const executor: CensorExecutor = { execute: mock(() => {}) };
     const lexicon: CensorLexicon = { matches: (token) => token === 'bad' };
     const statuses: string[] = [];
+    const onTranscript = mock(() => {});
 
     startCaptionBeeper(createMessaging(send), {
       source,
       lexicon,
       executor,
+      onTranscript,
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
 
-    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
+    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5, final: false });
     await flushMicrotasks();
 
     expect(executor.execute).toHaveBeenCalledWith({ startTime: 4, endTime: 5 });
+    expect(onTranscript).toHaveBeenCalledWith({
+      chunk: { text: 'bad', startTime: 4, endTime: 5, final: false },
+      censored: true,
+    });
     expect(send).not.toHaveBeenCalled();
     expect(statuses).toEqual(['loading', 'working']);
   });

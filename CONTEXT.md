@@ -65,8 +65,12 @@ The sequence of transcript chunks whose text is positioned on the `HTMLMediaElem
 _Avoid_: Plain transcript, untimed captions
 
 **Final transcript**:
-A timed transcript whose recognised words and time ranges will not be revised by its source. ML mode uses only Final transcript in its first release.
-_Avoid_: Partial result, provisional transcript
+A timed transcript whose recognised words and time ranges will not be revised by its source. ML mode emits it after an utterance boundary to confirm the recognizer's result and exact word timing.
+_Avoid_: Partial result
+
+**Provisional transcript**:
+An early ML recognition hypothesis emitted before the utterance ends. Because the bundled browser Vosk wrapper exposes partial text without word timing, newly observed tokens receive a short conservative range anchored to the current media time. It enables censorship before delayed playback reaches the viewer and is visibly distinguished from Final transcript in diagnostics.
+_Avoid_: Untimed partial text, final result
 
 **Censored playback**:
 ML-source playback whose audio and video are shifted by the same delay so a censoring action can be scheduled before a recognised word reaches the viewer. YouTube timedtext playback remains real-time.

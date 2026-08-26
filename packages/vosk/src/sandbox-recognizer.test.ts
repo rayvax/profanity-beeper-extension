@@ -46,7 +46,7 @@ describe('Vosk sandbox speech recognizer', () => {
     document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
   });
 
-  test('loads one local model and emits only final media-timeline words', async () => {
+  test('loads one local model and emits provisional and final media-timeline words', async () => {
     const { fetchModel, iframe, postMessage, recognizer } = await preloadRecognizer();
     const media = Object.assign(new EventTarget(), {
       currentTime: 10,
@@ -67,7 +67,11 @@ describe('Vosk sandbox speech recognizer', () => {
     emitSandboxMessage(iframe, {
       source: 'bleep-sandbox',
       type: 'partial',
-      words: [{ word: 'черновик', start: 0, end: 1 }],
+      text: 'черновик',
+    });
+    expect(onResult).toHaveBeenCalledWith({
+      final: false,
+      words: [{ text: 'черновик', startTime: 8.4, endTime: 10.2 }],
     });
     emitSandboxMessage(iframe, {
       source: 'bleep-sandbox',
@@ -77,7 +81,7 @@ describe('Vosk sandbox speech recognizer', () => {
 
     expect(fetchModel).toHaveBeenCalledTimes(1);
     expect(subscribe).toHaveBeenCalledTimes(1);
-    expect(onResult).toHaveBeenCalledTimes(1);
+    expect(onResult).toHaveBeenCalledTimes(2);
     expect(onResult).toHaveBeenCalledWith({
       final: true,
       words: [{ text: 'дурак', startTime: 12, endTime: 14 }],

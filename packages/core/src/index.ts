@@ -8,6 +8,7 @@ export type {
   WordCapturedMessage,
   WordCensoredMessage,
   CensorStatusValue,
+  MlTranscriptEntry,
 } from './messages';
 export { createMessaging } from './messaging';
 export type {

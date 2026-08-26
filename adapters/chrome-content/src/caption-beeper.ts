@@ -23,6 +23,7 @@ export type TimedCensorSessionOptions = {
   executor: CensorExecutor;
   armOnInteraction?: boolean;
   updateSettings?(settings: CensorSettings): void;
+  onTranscript?(entry: { chunk: TranscriptChunk; censored: boolean }): void;
   onStatus?: (status: CensorSessionStatus) => void;
 };
 
@@ -172,6 +173,7 @@ export function startCaptionBeeper(
     if (options) {
       try {
         const ranges = createCensorRanges(chunk, options.lexicon);
+        options.onTranscript?.({ chunk, censored: ranges.length > 0 });
         await Promise.all(ranges.map((range) => options.executor.execute(range)));
       } catch (error) {
         if (controller.signal.aborted || abortController !== controller) {

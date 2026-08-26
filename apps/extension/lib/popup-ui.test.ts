@@ -7,7 +7,10 @@ const originalChrome = globalThis.chrome;
 function popupMarkup(): string {
   return `
     <form id="settings">
-      <select name="source"><option value="captions">captions</option></select>
+      <select name="source">
+        <option value="captions">captions</option>
+        <option value="ml">ML</option>
+      </select>
       <select name="effect"><option value="beep">beep</option></select>
       <input name="delaySeconds" value="1.2" />
       <textarea name="literalAdditions"></textarea>
@@ -16,7 +19,10 @@ function popupMarkup(): string {
       <output id="delay"></output>
       <p id="status"></p>
       <p id="error"></p>
-    </form>`;
+    </form>
+    <section id="ml-debug" hidden>
+      <div id="ml-transcript"></div>
+    </section>`;
 }
 
 async function flushMessages(): Promise<void> {
@@ -35,8 +41,12 @@ describe('popup UI', () => {
     GlobalRegistrator.unregister();
   });
 
-  test('shows a settings error returned by the service worker', async () => {
-    const settings = createDefaultCensorSettings();
+  test('shows a settings error and live ML transcript diagnostics', async () => {
+    const settings = { ...createDefaultCensorSettings(), source: 'ml' as const };
+    let runtimeListener: (
+      message: unknown,
+      sender: chrome.runtime.MessageSender,
+    ) => void = () => {};
     globalThis.chrome = {
       tabs: { query: mock(async () => [{ id: 7 }]) },
       runtime: {
@@ -45,7 +55,12 @@ describe('popup UI', () => {
           if (message.type === MessageType.GET_CENSOR_STATUS) return { status: 'working' };
           return { ok: false, error: 'Invalid RegExp: [' };
         }),
-        onMessage: { addListener: mock(() => {}), removeListener: mock(() => {}) },
+        onMessage: {
+          addListener: mock((listener) => {
+            runtimeListener = listener;
+          }),
+          removeListener: mock(() => {}),
+        },
       },
     } as unknown as typeof chrome;
 
@@ -55,5 +70,16 @@ describe('popup UI', () => {
     await flushMessages();
 
     expect(document.querySelector('#error')?.textContent).toBe('Invalid RegExp: [');
+    runtimeListener(
+      {
+        type: 'ML_TRANSCRIPT_UPDATED',
+        entry: { text: 'дурак', censored: true, final: false },
+      },
+      { tab: { id: 7 } },
+    );
+
+    expect(document.querySelector<HTMLElement>('#ml-debug')?.hidden).toBeFalse();
+    expect(document.querySelector('#ml-transcript')?.textContent).toContain('дурак');
+    expect(document.querySelector('#ml-transcript .censored')).not.toBeNull();
   });
 });

@@ -8,7 +8,7 @@
         font-family: system-ui, sans-serif;
         margin: 0;
         padding: 12px 14px;
-        min-width: 220px;
+        min-width: 340px;
         font-size: 13px;
       }
       p {
@@ -25,6 +25,43 @@
         font-size: 11px;
         color: #555;
         line-height: 1.4;
+      }
+      #ml-debug {
+        margin-top: 12px;
+        border-top: 1px solid #ddd;
+        padding-top: 10px;
+      }
+      #ml-debug h2 {
+        margin: 0 0 6px;
+        font-size: 12px;
+      }
+      #ml-transcript {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 8px;
+        border-radius: 6px;
+        background: #f3f3f3;
+        line-height: 1.7;
+      }
+      #ml-transcript span {
+        display: inline-block;
+        margin-right: 5px;
+      }
+      #ml-transcript .partial {
+        color: #666;
+        font-style: italic;
+      }
+      #ml-transcript .censored {
+        border-radius: 3px;
+        padding: 0 3px;
+        background: #b3261e;
+        color: #fff;
+        font-weight: 700;
+      }
+      #ml-debug .legend {
+        margin: 0 0 6px;
+        color: #666;
+        font-size: 11px;
       }
     </style>
   </head>
@@ -55,6 +92,13 @@
       <p id="status"></p>
       <p id="error" role="alert"></p>
     </form>
+    <section id="ml-debug" hidden>
+      <h2>Распознавание ML</h2>
+      <p class="legend">Серым — предварительно, красным — цензурируется</p>
+      <div id="ml-transcript" aria-live="polite">
+        <span data-empty>Ожидание распознавания…</span>
+      </div>
+    </section>
     <script type="module" src="../lib/popup-ui.ts"></script>
   </body>
 </html>

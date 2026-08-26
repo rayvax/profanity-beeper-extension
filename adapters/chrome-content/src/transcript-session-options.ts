@@ -17,6 +17,7 @@ import { SpeechTranscriptSource } from './speech-transcript-source';
 export type MlCensorSessionOptions = {
   workletUrl: string;
   recognizer: SpeechRecognizer;
+  onTranscript?: TimedCensorSessionOptions['onTranscript'];
 };
 
 export function createTimedtextCensorSessionOptions(
@@ -85,6 +86,7 @@ export function createMlCensorSessionOptions(
     lexicon: createCensorLexiconFromSettings(settings),
     executor,
     armOnInteraction: true,
+    onTranscript: mlOptions.onTranscript,
     updateSettings(nextSettings) {
       sessionOptions.lexicon = createCensorLexiconFromSettings(nextSettings);
       playback.updateOptions({

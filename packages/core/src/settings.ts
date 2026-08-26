@@ -33,20 +33,30 @@ const MAX_PATTERN_LENGTH = 256;
 
 const DEFAULT_RUSSIAN_CENSOR_WORDS = [
   'блядь',
+  'блядюга',
   'блять',
   'ебать',
+  'ебал',
+  'ебался',
+  'еблан',
   'ебаный',
   'ебанутая',
   'ебануть',
   'мудак',
+  'дурак',
+  'ты',
+  'дружочек',
   'пизда',
   'пиздец',
   'пиздёж',
   'сука',
   'хуй',
   'хуя',
+  'хуйлан',
   'хуе',
 ] as const;
+
+// https://www.youtube.com/watch?v=wls9_A9WfJ8
 
 export function createDefaultCensorSettings(): CensorSettings {
   return {

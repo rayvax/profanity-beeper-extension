@@ -1,4 +1,8 @@
-import { MessageType, type CensorSettings } from '@beeper/adapter-chrome-content';
+import {
+  MessageType,
+  type CensorSettings,
+  type MlTranscriptEntry,
+} from '@beeper/adapter-chrome-content';
 import { chromeMessaging } from './chrome-messaging';
 
 const form = document.querySelector<HTMLFormElement>('#settings')!;
@@ -11,6 +15,9 @@ const delayField = form.elements.namedItem('delaySeconds') as HTMLInputElement;
 const additionsField = form.elements.namedItem('literalAdditions') as HTMLTextAreaElement;
 const patternsField = form.elements.namedItem('patterns') as HTMLTextAreaElement;
 const whitelistField = form.elements.namedItem('whitelist') as HTMLTextAreaElement;
+const mlDebug = document.querySelector<HTMLElement>('#ml-debug')!;
+const mlTranscript = document.querySelector<HTMLElement>('#ml-transcript')!;
+const MAX_TRANSCRIPT_ENTRIES = 80;
 
 function lines(value: string): string[] {
   return value
@@ -27,6 +34,7 @@ function showSettings(settings: CensorSettings): void {
   patternsField.value = settings.patterns.join('\n');
   whitelistField.value = settings.whitelist.join('\n');
   delay.value = `${settings.delaySeconds.toFixed(1)} с`;
+  mlDebug.hidden = settings.source !== 'ml';
 }
 
 function readSettings(): CensorSettings {
@@ -67,7 +75,7 @@ async function main(): Promise<void> {
       status.textContent = 'waiting';
     }
   }
-  chrome.runtime.onMessage.addListener((message: unknown) => {
+  chrome.runtime.onMessage.addListener((message: unknown, sender) => {
     if (
       typeof message === 'object' &&
       message !== null &&
@@ -79,6 +87,12 @@ async function main(): Promise<void> {
       message.tabId === activeTabId
     ) {
       status.textContent = message.status;
+    }
+    if (
+      isMlTranscriptMessage(message) &&
+      (sender.tab?.id === undefined || sender.tab.id === activeTabId)
+    ) {
+      appendTranscriptEntry(message.entry);
     }
   });
 
@@ -101,6 +115,44 @@ async function main(): Promise<void> {
   delayField.addEventListener('input', () => {
     delay.value = `${Number(delayField.value).toFixed(1)} с`;
   });
+}
+
+function isMlTranscriptMessage(
+  message: unknown,
+): message is { type: typeof MessageType.ML_TRANSCRIPT_UPDATED; entry: MlTranscriptEntry } {
+  if (
+    typeof message !== 'object' ||
+    message === null ||
+    !('type' in message) ||
+    message.type !== MessageType.ML_TRANSCRIPT_UPDATED ||
+    !('entry' in message) ||
+    typeof message.entry !== 'object' ||
+    message.entry === null
+  ) {
+    return false;
+  }
+  const entry = message.entry as Partial<MlTranscriptEntry>;
+  return (
+    typeof entry.text === 'string' &&
+    typeof entry.censored === 'boolean' &&
+    typeof entry.final === 'boolean'
+  );
+}
+
+function appendTranscriptEntry(entry: MlTranscriptEntry): void {
+  mlTranscript.querySelector('[data-empty]')?.remove();
+  const element = document.createElement('span');
+  element.classList.add(entry.final ? 'final' : 'partial');
+  if (entry.censored) element.classList.add('censored');
+  element.textContent = entry.text;
+  if (entry.startTime !== undefined && entry.endTime !== undefined) {
+    element.title = `${entry.startTime.toFixed(2)}–${entry.endTime.toFixed(2)} с`;
+  }
+  mlTranscript.append(element);
+  while (mlTranscript.childElementCount > MAX_TRANSCRIPT_ENTRIES) {
+    mlTranscript.firstElementChild?.remove();
+  }
+  mlTranscript.scrollTop = mlTranscript.scrollHeight;
 }
 
 void main();

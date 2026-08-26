@@ -13,4 +13,4 @@ export { SpeechTranscriptSource } from './speech-transcript-source';
 export type { SpeechRecognizer } from '@beeper/speech';
 export { DomTranscriptSource } from '@beeper/youtube';
 export { CensorSource, CensorStatus, MessageType, createDefaultCensorSettings } from '@beeper/core';
-export type { CensorSettings } from '@beeper/core';
+export type { CensorSettings, MlTranscriptEntry } from '@beeper/core';

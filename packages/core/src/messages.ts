@@ -8,6 +8,7 @@ export const MessageType = {
   CENSOR_SETTINGS_UPDATED: 'CENSOR_SETTINGS_UPDATED',
   CENSOR_STATUS_UPDATED: 'CENSOR_STATUS_UPDATED',
   GET_CENSOR_STATUS: 'GET_CENSOR_STATUS',
+  ML_TRANSCRIPT_UPDATED: 'ML_TRANSCRIPT_UPDATED',
 } as const;
 
 export const CensorStatus = {
@@ -47,6 +48,18 @@ export type MessageMap = {
     request: { tabId: number };
     response: { status?: CensorStatusValue };
   };
+  [MessageType.ML_TRANSCRIPT_UPDATED]: {
+    request: { entry: MlTranscriptEntry };
+    response: void;
+  };
+};
+
+export type MlTranscriptEntry = {
+  text: string;
+  startTime?: number;
+  endTime?: number;
+  final: boolean;
+  censored: boolean;
 };
 
 export type MessageTypeValue = keyof MessageMap;
