@@ -1,6 +1,6 @@
 export { startCaptionBeeper } from './caption-beeper';
 export { startCensorContentRuntime } from './content-runtime';
-export type { CensorContentRuntime } from './content-runtime';
+export type { CensorContentRuntime, CensorContentRuntimeDependencies } from './content-runtime';
 export type {
   CensorSessionStatus,
   TimedCensorSessionOptions,

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-import { createBeepCensorExecutor } from './beep-censor-executor';
+import { createCensorAudioExecutor } from './censor-audio-executor';
 
 class FakeAudioContext {
   currentTime = 10;
@@ -48,7 +48,7 @@ function createMedia(currentTime: number): HTMLMediaElement {
 let originalAudioContext: typeof AudioContext | undefined;
 let context: FakeAudioContext;
 
-describe('createBeepCensorExecutor', () => {
+describe('createCensorAudioExecutor', () => {
   beforeEach(() => {
     originalAudioContext = globalThis.AudioContext;
     context = new FakeAudioContext();
@@ -65,7 +65,7 @@ describe('createBeepCensorExecutor', () => {
 
   test('mutes the media and schedules a beep on the media timeline', async () => {
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     await executor.arm();
     await executor.execute({ startTime: 12, endTime: 14 });
@@ -79,7 +79,7 @@ describe('createBeepCensorExecutor', () => {
   });
 
   test('fails without touching playback when the media is unavailable', async () => {
-    const executor = createBeepCensorExecutor(() => null);
+    const executor = createCensorAudioExecutor(() => null);
 
     await expect(executor.execute({ startTime: 12, endTime: 14 })).rejects.toThrow(
       'Player media not found',
@@ -90,7 +90,7 @@ describe('createBeepCensorExecutor', () => {
 
   test('keeps original audio muted through overlapping ranges', async () => {
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     await executor.arm();
     await executor.execute({ startTime: 12, endTime: 14 });
@@ -99,9 +99,48 @@ describe('createBeepCensorExecutor', () => {
     expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, 14.01);
   });
 
+  test('merges adjacent ranges into one replacement effect', async () => {
+    const media = createMedia(12);
+    const executor = createCensorAudioExecutor(() => media);
+
+    await executor.execute({ startTime: 12, endTime: 14 });
+    await executor.execute({ startTime: 14.04, endTime: 16 });
+
+    // The second scheduling pass extends the active merged beep without
+    // replacing its oscillator mid-effect.
+    expect(context.createOscillator).toHaveBeenCalledTimes(1);
+    expect(context.oscillator.stop).toHaveBeenLastCalledWith(14);
+  });
+
+  test('reschedules pending ranges when the effect changes', async () => {
+    const media = createMedia(12);
+    const executor = createCensorAudioExecutor(() => media);
+    await executor.execute({ startTime: 20, endTime: 22 });
+    context.createOscillator.mockClear();
+
+    executor.updateOptions({ effect: 'silence' });
+
+    expect(context.createOscillator).not.toHaveBeenCalled();
+    expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 18);
+  });
+
+  test('keeps a range on the media timeline while playback buffers', async () => {
+    const media = createMedia(12);
+    const executor = createCensorAudioExecutor(() => media);
+    await executor.execute({ startTime: 12, endTime: 12.02 });
+
+    media.dispatchEvent(new Event('waiting'));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    context.createOscillator.mockClear();
+    media.dispatchEvent(new Event('playing'));
+
+    expect(context.createOscillator).toHaveBeenCalledTimes(1);
+    executor.stop();
+  });
+
   test('arms immediate playback lazily for the first timed range', async () => {
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     await executor.execute({ startTime: 12, endTime: 14 });
 
@@ -112,7 +151,7 @@ describe('createBeepCensorExecutor', () => {
 
   test('shares one media source across concurrent arms and executes', async () => {
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     executor.execute({ startTime: 12, endTime: 14 });
     executor.execute({ startTime: 20, endTime: 22 });
@@ -124,7 +163,7 @@ describe('createBeepCensorExecutor', () => {
   test('fails open without touching the media while the audio context stays suspended', async () => {
     context.state = 'suspended';
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     await expect(executor.arm()).rejects.toThrow('AudioContext is blocked');
 
@@ -134,7 +173,7 @@ describe('createBeepCensorExecutor', () => {
 
   test('rejects a queued range when stopped before arming', async () => {
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     const executed = executor.execute({ startTime: 12, endTime: 14 });
     executor.stop();
@@ -151,7 +190,7 @@ describe('createBeepCensorExecutor', () => {
         }),
     );
     const media = createMedia(12);
-    const executor = createBeepCensorExecutor(() => media);
+    const executor = createCensorAudioExecutor(() => media);
 
     const arming = executor.arm();
     executor.stop();

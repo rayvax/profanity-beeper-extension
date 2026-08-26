@@ -1,4 +1,4 @@
-import { createBeepCensorExecutor, createDelayedCensoredPlayback } from '@beeper/audio';
+import { createCensorAudioExecutor, createDelayedCensoredPlayback } from '@beeper/audio';
 import {
   createCensorLexiconFromSettings,
   type CensorExecutor,
@@ -23,7 +23,7 @@ export function createTimedtextCensorSessionOptions(
   settings: CensorSettings,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  const executor = createBeepCensorExecutor(findPlayerMedia, {
+  const executor = createCensorAudioExecutor(findPlayerMedia, {
     effect: settings.effect,
   });
   const sessionOptions: TimedCensorSessionOptions = {

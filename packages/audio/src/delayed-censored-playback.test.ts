@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-import { createBeepCensorExecutor } from './beep-censor-executor';
+import { createCensorAudioExecutor } from './censor-audio-executor';
 import { createDelayedCensoredPlayback } from './delayed-censored-playback';
 
 class FakeAudioContext {
@@ -105,7 +105,7 @@ describe('createDelayedCensoredPlayback', () => {
       paused: false,
       playbackRate: 1,
     }) as HTMLMediaElement;
-    const captions = createBeepCensorExecutor(() => media);
+    const captions = createCensorAudioExecutor(() => media);
     const ml = createDelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'silence',
@@ -157,5 +157,25 @@ describe('createDelayedCensoredPlayback', () => {
     expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(11.05);
     expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[0]).toBe(1);
     expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(13.36);
+  });
+
+  test('moves pending windows and replaces their effect when settings change', async () => {
+    const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+    await playback.arm();
+    await playback.execute({ startTime: 10, endTime: 11 });
+    context.createOscillator.mockClear();
+    context.gain.gain.linearRampToValueAtTime.mockClear();
+
+    playback.updateOptions({ delaySeconds: 2, effect: 'silence' });
+
+    expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(2, 10);
+    expect(context.createOscillator).not.toHaveBeenCalled();
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(11.85);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(13.16);
   });
 });

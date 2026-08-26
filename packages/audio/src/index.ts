@@ -1,21 +1,15 @@
 export { playBeep } from './beep';
-export { createBeepCensorExecutor } from './beep-censor-executor';
-export { createDelayedCensorExecutor } from './delayed-censor-executor';
+export { createCensorAudioExecutor } from './censor-audio-executor';
 export { createDelayedCensoredPlayback } from './delayed-censored-playback';
 export { CensorAudioEffect } from './censor-effect';
 export type { CensorAudioEffectValue } from './censor-effect';
 export { acquireMediaGraph } from './media-graph';
 export type { SharedMediaGraph } from './media-graph';
 export type {
-  BeepCensorExecutor,
+  CensorAudioExecutor,
   CensorAudioOptions,
   MediaTimelineRange,
-} from './beep-censor-executor';
-export type {
-  DelayedCensorExecutor,
-  DelayedCensorOptions,
-  DelayedCensorRange,
-} from './delayed-censor-executor';
+} from './censor-audio-executor';
 export type {
   DelayedCensoredPlayback,
   DelayedCensoredPlaybackOptions,

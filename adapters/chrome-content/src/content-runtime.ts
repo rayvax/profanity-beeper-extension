@@ -13,12 +13,31 @@ import {
   createTimedtextCensorSessionOptions,
   type MlCensorSessionOptions,
 } from './transcript-session-options';
+import type { TimedCensorSessionOptions } from './caption-beeper';
 
 export type CensorContentRuntime = { stop(): void };
+
+export type CensorContentRuntimeDependencies = {
+  startSession(messaging: Messaging, options: TimedCensorSessionOptions): TranscriptBeeperSession;
+  createTimedtextOptions(
+    settings: CensorSettings,
+    onStatus: TimedCensorSessionOptions['onStatus'],
+  ): TimedCensorSessionOptions;
+  createMlOptions(
+    settings: CensorSettings,
+    mlOptions: MlCensorSessionOptions,
+    onStatus: TimedCensorSessionOptions['onStatus'],
+  ): TimedCensorSessionOptions;
+};
 
 export async function startCensorContentRuntime(
   messaging: Messaging,
   mlOptions: MlCensorSessionOptions,
+  dependencies: CensorContentRuntimeDependencies = {
+    startSession: startCaptionBeeper,
+    createTimedtextOptions: createTimedtextCensorSessionOptions,
+    createMlOptions: createMlCensorSessionOptions,
+  },
 ): Promise<CensorContentRuntime> {
   let session: TranscriptBeeperSession | undefined;
   let currentSettings: CensorSettings | undefined;
@@ -30,11 +49,11 @@ export async function startCensorContentRuntime(
   };
   const start = (settings: CensorSettings) => {
     session?.stop();
-    session = startCaptionBeeper(
+    session = dependencies.startSession(
       messaging,
       settings.source === CensorSource.ML
-        ? createMlCensorSessionOptions(settings, mlOptions, sendStatus)
-        : createTimedtextCensorSessionOptions(settings, sendStatus),
+        ? dependencies.createMlOptions(settings, mlOptions, sendStatus)
+        : dependencies.createTimedtextOptions(settings, sendStatus),
     );
     currentSettings = settings;
   };
