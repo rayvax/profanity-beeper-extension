@@ -74,8 +74,8 @@ describe('createBeepCensorExecutor', () => {
     expect(context.delay.connect).toHaveBeenCalledWith(context.gain);
     expect(context.oscillator.start).toHaveBeenCalledWith(10);
     expect(context.oscillator.stop).toHaveBeenCalledWith(12);
-    expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 10);
-    expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(1, 12);
+    expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.01);
+    expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(1, 12.01);
   });
 
   test('fails without touching playback when the media is unavailable', async () => {
@@ -96,7 +96,7 @@ describe('createBeepCensorExecutor', () => {
     await executor.execute({ startTime: 12, endTime: 14 });
     await executor.execute({ startTime: 12, endTime: 16 });
 
-    expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, 14);
+    expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, 14.01);
   });
 
   test('arms immediate playback lazily for the first timed range', async () => {
@@ -107,7 +107,7 @@ describe('createBeepCensorExecutor', () => {
 
     expect(context.createMediaElementSource).toHaveBeenCalledTimes(1);
     expect(context.oscillator.start).toHaveBeenCalledWith(10);
-    expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 10);
+    expect(context.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.01);
   });
 
   test('shares one media source across concurrent arms and executes', async () => {

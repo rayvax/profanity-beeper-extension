@@ -70,7 +70,7 @@ describe('createDelayedCensoredPlayback', () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
     const playback = createDelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
-      beep: true,
+      effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
     });
 
@@ -88,7 +88,7 @@ describe('createDelayedCensoredPlayback', () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
     const playback = createDelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
-      beep: false,
+      effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
     });
 
@@ -108,7 +108,7 @@ describe('createDelayedCensoredPlayback', () => {
     const captions = createBeepCensorExecutor(() => media);
     const ml = createDelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
-      beep: false,
+      effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
     });
 
@@ -127,7 +127,7 @@ describe('createDelayedCensoredPlayback', () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
     const playback = createDelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
-      beep: false,
+      effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
     });
 
@@ -135,5 +135,27 @@ describe('createDelayedCensoredPlayback', () => {
 
     expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
     expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, 10);
+  });
+
+  test('reschedules adjacent future ranges without muting clean audio early', async () => {
+    const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'silence',
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+    await playback.arm();
+    await playback.execute({ startTime: 10, endTime: 11 });
+    context.gain.gain.setValueAtTime.mockClear();
+    context.gain.gain.linearRampToValueAtTime.mockClear();
+
+    await playback.execute({ startTime: 11, endTime: 12 });
+
+    expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(1, 10);
+    expect(context.gain.gain.setValueAtTime).not.toHaveBeenCalledWith(0, 10);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[0]).toBe(0);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(11.05);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[0]).toBe(1);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(13.36);
   });
 });

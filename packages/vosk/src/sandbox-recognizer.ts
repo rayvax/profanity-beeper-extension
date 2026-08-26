@@ -90,15 +90,21 @@ export function createVoskSandboxSpeechRecognizer(
       let unsubscribe: (() => void) | undefined;
       let stopped = false;
       let sampleRate: number | undefined;
+      const stopStream = () => {
+        sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
+      };
       const restartStream = () => {
         if (stopped || sampleRate === undefined) return;
+        stopStream();
+        if (recognitionOptions.media.paused) return;
         active.streamStartTime = recognitionOptions.media.currentTime;
         active.playbackRate = recognitionOptions.media.playbackRate;
-        sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
         sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
       };
       recognitionOptions.media.addEventListener('seeked', restartStream);
       recognitionOptions.media.addEventListener('ratechange', restartStream);
+      recognitionOptions.media.addEventListener('play', restartStream);
+      recognitionOptions.media.addEventListener('pause', stopStream);
       void recognitionOptions.audioInput.sampleRate
         .then((resolvedSampleRate) => {
           if (stopped) return;
@@ -117,8 +123,10 @@ export function createVoskSandboxSpeechRecognizer(
         stopped = true;
         recognitionOptions.media.removeEventListener('seeked', restartStream);
         recognitionOptions.media.removeEventListener('ratechange', restartStream);
+        recognitionOptions.media.removeEventListener('play', restartStream);
+        recognitionOptions.media.removeEventListener('pause', stopStream);
         unsubscribe?.();
-        sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
+        stopStream();
         if (activeRecognition === active) activeRecognition = undefined;
       };
       active.stop = stop;

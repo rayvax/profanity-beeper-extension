@@ -3,6 +3,7 @@ import {
   MessageType,
   type CensorExecutor,
   type CensorLexicon,
+  type CensorSettings,
   type Messaging,
   type TranscriptChunk,
   type TranscriptSession,
@@ -16,20 +17,19 @@ const PLAYER_WAIT_MS = 5_000;
 
 export type CensorSessionStatus = 'loading' | 'working' | 'error';
 
-export type CensorSessionSettings = {
-  enabled: boolean;
-};
-
 export type TimedCensorSessionOptions = {
   source: TranscriptSource;
   lexicon: CensorLexicon;
   executor: CensorExecutor;
-  settings: CensorSessionSettings;
   armOnInteraction?: boolean;
+  updateSettings?(settings: CensorSettings): void;
   onStatus?: (status: CensorSessionStatus) => void;
 };
 
-export type TranscriptBeeperSession = { stop(): void };
+export type TranscriptBeeperSession = {
+  updateSettings(settings: CensorSettings): void;
+  stop(): void;
+};
 
 export function startCaptionBeeper(
   messaging: Messaging,
@@ -170,10 +170,6 @@ export function startCaptionBeeper(
 
   async function handleChunk(chunk: TranscriptChunk, controller: AbortController) {
     if (options) {
-      if (!options.settings.enabled) {
-        return;
-      }
-
       try {
         const ranges = createCensorRanges(chunk, options.lexicon);
         await Promise.all(ranges.map((range) => options.executor.execute(range)));
@@ -223,6 +219,9 @@ export function startCaptionBeeper(
   void bind();
 
   return {
+    updateSettings(settings) {
+      options?.updateSettings?.(settings);
+    },
     stop() {
       clearTimeout(rebindTimer);
       document.removeEventListener('yt-navigate-finish', scheduleRebind);

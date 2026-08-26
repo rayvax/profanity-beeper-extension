@@ -1,4 +1,5 @@
 import { acquireMediaGraph } from './media-graph';
+import { scheduleCensorEffect, type CensorAudioEffectValue } from './censor-effect';
 
 export type DelayedCensorRange = {
   startTime: number;
@@ -14,12 +15,13 @@ export type DelayedCensoredPlayback = {
   readonly audioInput: PcmAudioInput;
   arm(): Promise<void>;
   execute(range: DelayedCensorRange): Promise<void>;
+  updateOptions(options: Pick<DelayedCensoredPlaybackOptions, 'delaySeconds' | 'effect'>): void;
   stop(): void;
 };
 
 export type DelayedCensoredPlaybackOptions = {
   delaySeconds: number;
-  beep: boolean;
+  effect: CensorAudioEffectValue;
   workletUrl: string;
   paddingSeconds?: number;
   mergeGapSeconds?: number;
@@ -34,8 +36,11 @@ type PlaybackGraph = {
   tap?: AudioNode;
   active: boolean;
   mutedUntil: number;
+  windows: CensorWindow[];
   oscillator?: OscillatorNode;
 };
+
+type CensorWindow = { start: number; end: number };
 
 const DEFAULT_PADDING_SECONDS = 0.15;
 const DEFAULT_MERGE_GAP_SECONDS = 0.05;
@@ -49,6 +54,7 @@ export function createDelayedCensoredPlayback(
   getMedia: () => HTMLMediaElement | null,
   options: DelayedCensoredPlaybackOptions,
 ): DelayedCensoredPlayback {
+  const currentOptions = { ...options };
   const listeners = new Set<(pcm: ArrayBuffer) => void>();
   let sampleRatePromise = createPendingPromise<number>();
   let graph: PlaybackGraph | undefined;
@@ -65,14 +71,19 @@ export function createDelayedCensoredPlayback(
 
   return {
     audioInput,
+    updateOptions(nextOptions) {
+      currentOptions.delaySeconds = nextOptions.delaySeconds;
+      currentOptions.effect = nextOptions.effect;
+      if (graph?.active) setDelay(graph.delay, graph.context, currentOptions.delaySeconds);
+    },
     async arm() {
       const media = getMedia();
       if (!media) throw new Error('Player media not found');
 
       if (graph?.media !== media) {
-        graph = await createGraph(media, options, listeners);
+        graph = await createGraph(media, currentOptions, listeners);
       } else if (!graph.active) {
-        setDelay(graph.delay, graph.context, options.delaySeconds);
+        setDelay(graph.delay, graph.context, currentOptions.delaySeconds);
         graph.active = true;
         graph.mutedUntil = graph.context.currentTime;
         graph.tap = await createTap(graph.context, options.workletUrl, listeners);
@@ -88,7 +99,7 @@ export function createDelayedCensoredPlayback(
       if (!graph?.active) {
         throw new Error('Delayed playback is not armed');
       }
-      scheduleCensorRange(graph, range, options);
+      scheduleCensorRange(graph, range, currentOptions);
     },
     stop() {
       listeners.clear();
@@ -135,6 +146,7 @@ async function createGraph(
     tap,
     active: true,
     mutedUntil: context.currentTime,
+    windows: [],
   };
 }
 
@@ -205,35 +217,63 @@ function scheduleCensorRange(
   const merged = start <= graph.mutedUntil + mergeGap;
   const windowEnd = Math.max(end, graph.mutedUntil);
 
-  graph.gain.gain.cancelScheduledValues(now);
-  if (merged) {
-    graph.gain.gain.setValueAtTime(0, now);
-  } else {
-    graph.gain.gain.setValueAtTime(1, Math.max(now, start - 0.01));
-    graph.gain.gain.linearRampToValueAtTime(0, start);
-  }
-  graph.gain.gain.setValueAtTime(0, windowEnd);
-  graph.gain.gain.linearRampToValueAtTime(1, windowEnd + 0.01);
+  graph.windows = mergeWindows(
+    [...graph.windows.filter((window) => window.end >= now), { start, end }],
+    mergeGap,
+  );
+  scheduleGainWindows(graph, now);
   graph.mutedUntil = windowEnd;
 
-  if (!options.beep) return;
-  if (!merged || !graph.oscillator) {
-    const oscillator = graph.context.createOscillator();
-    oscillator.frequency.value = 880;
-    oscillator.connect(graph.context.destination);
-    oscillator.onended = () => {
+  const activeOscillator = merged ? graph.oscillator : undefined;
+  const oscillator = scheduleCensorEffect(
+    graph.context,
+    options.effect,
+    start,
+    windowEnd,
+    activeOscillator,
+    () => {
       if (graph.oscillator === oscillator) graph.oscillator = undefined;
-    };
-    oscillator.start(start);
-    graph.oscillator = oscillator;
-  }
-  graph.oscillator.stop(windowEnd);
+    },
+  );
+  graph.oscillator = oscillator;
 }
 
 function restoreGain(graph: PlaybackGraph): void {
   graph.gain.gain.cancelScheduledValues(graph.context.currentTime);
   graph.gain.gain.setValueAtTime(1, graph.context.currentTime);
   graph.mutedUntil = graph.context.currentTime;
+  graph.windows = [];
+}
+
+function mergeWindows(windows: CensorWindow[], mergeGap: number): CensorWindow[] {
+  return windows
+    .sort((left, right) => left.start - right.start)
+    .reduce<CensorWindow[]>((merged, window) => {
+      const previous = merged.at(-1);
+      if (previous && window.start <= previous.end + mergeGap) {
+        previous.end = Math.max(previous.end, window.end);
+      } else {
+        merged.push({ ...window });
+      }
+      return merged;
+    }, []);
+}
+
+function scheduleGainWindows(graph: PlaybackGraph, now: number): void {
+  const fadeSeconds = 0.01;
+  graph.gain.gain.cancelScheduledValues(now);
+  const active = graph.windows.some((window) => window.start <= now && window.end > now);
+  graph.gain.gain.setValueAtTime(active ? 0 : 1, now);
+
+  graph.windows.forEach((window) => {
+    if (window.end <= now) return;
+    if (window.start > now) {
+      graph.gain.gain.setValueAtTime(1, Math.max(now, window.start - fadeSeconds));
+      graph.gain.gain.linearRampToValueAtTime(0, window.start);
+    }
+    graph.gain.gain.setValueAtTime(0, window.end);
+    graph.gain.gain.linearRampToValueAtTime(1, window.end + fadeSeconds);
+  });
 }
 
 function createPendingPromise<T>(): {

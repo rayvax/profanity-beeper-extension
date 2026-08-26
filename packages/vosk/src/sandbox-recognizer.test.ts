@@ -50,6 +50,7 @@ describe('Vosk sandbox speech recognizer', () => {
     const { fetchModel, iframe, postMessage, recognizer } = await preloadRecognizer();
     const media = Object.assign(new EventTarget(), {
       currentTime: 10,
+      paused: false,
       playbackRate: 2,
     }) as HTMLMediaElement;
     const onResult = mock(() => {});
@@ -93,6 +94,21 @@ describe('Vosk sandbox speech recognizer', () => {
     expect(onResult).toHaveBeenLastCalledWith({
       final: true,
       words: [{ text: 'сука', startTime: 51, endTime: 52 }],
+    });
+
+    media.paused = true;
+    media.dispatchEvent(new Event('pause'));
+    media.currentTime = 60;
+    media.paused = false;
+    media.dispatchEvent(new Event('play'));
+    emitSandboxMessage(iframe, {
+      source: 'bleep-sandbox',
+      type: 'result',
+      words: [{ word: 'хуй', start: 1, end: 2 }],
+    });
+    expect(onResult).toHaveBeenLastCalledWith({
+      final: true,
+      words: [{ text: 'хуй', startTime: 61, endTime: 62 }],
     });
     expect(postMessage).toHaveBeenCalledWith(
       { target: 'bleep-sandbox', type: 'start', sampleRate: 48_000 },

@@ -23,13 +23,20 @@ export function createTimedtextCensorSessionOptions(
   settings: CensorSettings,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  return {
+  const executor = createBeepCensorExecutor(findPlayerMedia, {
+    effect: settings.effect,
+  });
+  const sessionOptions: TimedCensorSessionOptions = {
     source: new YoutubeTimedtextSource(),
     lexicon: createCensorLexiconFromSettings(settings),
-    executor: createBeepCensorExecutor(findPlayerMedia, { beep: settings.effect === 'beep' }),
-    settings: { enabled: true },
+    executor,
+    updateSettings(nextSettings) {
+      sessionOptions.lexicon = createCensorLexiconFromSettings(nextSettings);
+      executor.updateOptions({ effect: nextSettings.effect });
+    },
     onStatus,
   };
+  return sessionOptions;
 }
 
 export function createMlCensorSessionOptions(
@@ -39,7 +46,7 @@ export function createMlCensorSessionOptions(
 ): TimedCensorSessionOptions {
   const playback = createDelayedCensoredPlayback(findPlayerMedia, {
     delaySeconds: settings.delaySeconds,
-    beep: settings.effect === 'beep',
+    effect: settings.effect,
     workletUrl: mlOptions.workletUrl,
   });
   let renderer: ReturnType<typeof createDelayedVideoRenderer> | undefined;
@@ -50,6 +57,7 @@ export function createMlCensorSessionOptions(
     playback.stop();
     failureListeners.forEach((listener) => listener(error));
   };
+  const rendererOptions = { delaySeconds: settings.delaySeconds, onError: fail };
   const executor: CensorExecutor & MlPlaybackExecutor = {
     execute: (range) => playback.execute(range),
     async arm() {
@@ -60,10 +68,7 @@ export function createMlCensorSessionOptions(
         throw new Error('Player video not found');
       }
       renderer?.stop();
-      renderer = createDelayedVideoRenderer(media, {
-        delaySeconds: settings.delaySeconds,
-        onError: fail,
-      });
+      renderer = createDelayedVideoRenderer(media, rendererOptions);
     },
     onError(listener) {
       failureListeners.add(listener);
@@ -75,14 +80,22 @@ export function createMlCensorSessionOptions(
       playback.stop();
     },
   };
-  return {
+  const sessionOptions: TimedCensorSessionOptions = {
     source: new SpeechTranscriptSource(mlOptions.recognizer, findPlayerMedia, playback.audioInput),
     lexicon: createCensorLexiconFromSettings(settings),
     executor,
-    settings: { enabled: true },
     armOnInteraction: true,
+    updateSettings(nextSettings) {
+      sessionOptions.lexicon = createCensorLexiconFromSettings(nextSettings);
+      playback.updateOptions({
+        delaySeconds: nextSettings.delaySeconds,
+        effect: nextSettings.effect,
+      });
+      rendererOptions.delaySeconds = nextSettings.delaySeconds;
+    },
     onStatus,
   };
+  return sessionOptions;
 }
 
 type MlPlaybackExecutor = {

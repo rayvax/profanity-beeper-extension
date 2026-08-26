@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from '
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import {
   MessageType,
+  createDefaultCensorSettings,
   type CensorExecutor,
   type CensorLexicon,
   type Messaging,
@@ -140,7 +141,6 @@ describe('startCaptionBeeper', () => {
       source,
       lexicon,
       executor,
-      settings: { enabled: true },
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -169,7 +169,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: (token) => token === 'bad' },
         executor,
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -193,7 +192,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: () => false },
         executor,
-        settings: { enabled: true },
         armOnInteraction: true,
         onStatus: (status) => statuses.push(status),
       },
@@ -220,7 +218,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: () => false },
         executor,
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -228,6 +225,28 @@ describe('startCaptionBeeper', () => {
 
     expect(executor.arm).not.toHaveBeenCalled();
     expect(statuses).toEqual(['loading', 'working']);
+  });
+
+  test('updates active settings without rebinding the transcript source', async () => {
+    const source = new FakeTranscriptSource();
+    const updateSettings = mock(() => {});
+    const session = startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source,
+        lexicon: { matches: () => false },
+        executor: { execute: mock(async () => {}) },
+        updateSettings,
+      },
+    );
+    await flushMicrotasks();
+    source.stop.mockClear();
+    const settings = { ...createDefaultCensorSettings(), delaySeconds: 2 };
+
+    session.updateSettings(settings);
+
+    expect(updateSettings).toHaveBeenCalledWith(settings);
+    expect(source.stop).not.toHaveBeenCalled();
   });
 
   test('restores playback and reports an error from speech recognition', async () => {
@@ -240,7 +259,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: () => false },
         executor: { execute: mock(async () => {}), stop },
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -265,7 +283,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: () => false },
         executor: { execute: mock(async () => {}) },
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -283,7 +300,6 @@ describe('startCaptionBeeper', () => {
         source: new AbortedTranscriptSource(),
         lexicon: { matches: () => false },
         executor: { execute: mock(async () => {}) },
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -336,7 +352,6 @@ describe('startCaptionBeeper', () => {
         source,
         lexicon: { matches: (token) => token === 'bad' },
         executor,
-        settings: { enabled: true },
         onStatus: (status) => statuses.push(status),
       },
     );
