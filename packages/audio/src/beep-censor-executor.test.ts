@@ -99,16 +99,13 @@ describe('createBeepCensorExecutor', () => {
     expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, 14);
   });
 
-  test('queues a range until the executor is armed on a user gesture', async () => {
+  test('arms immediate playback lazily for the first timed range', async () => {
     const media = createMedia(12);
     const executor = createBeepCensorExecutor(() => media);
 
-    const executed = executor.execute({ startTime: 12, endTime: 14 });
-    expect(context.createMediaElementSource).not.toHaveBeenCalled();
+    await executor.execute({ startTime: 12, endTime: 14 });
 
-    await executor.arm();
-    await executed;
-
+    expect(context.createMediaElementSource).toHaveBeenCalledTimes(1);
     expect(context.oscillator.start).toHaveBeenCalledWith(10);
     expect(context.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 10);
   });

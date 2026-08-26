@@ -14,7 +14,6 @@
     "@beeper/audio": "workspace:*",
     "@beeper/core": "workspace:*",
     "@beeper/speech": "workspace:*",
-    "@beeper/vosk": "workspace:*",
     "@beeper/youtube": "workspace:*"
   }
 }

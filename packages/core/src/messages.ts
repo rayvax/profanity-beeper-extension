@@ -40,7 +40,7 @@ export type MessageMap = {
     response: void;
   };
   [MessageType.CENSOR_STATUS_UPDATED]: {
-    request: { status: CensorStatusValue };
+    request: { status: CensorStatusValue; tabId?: number };
     response: void;
   };
   [MessageType.GET_CENSOR_STATUS]: {

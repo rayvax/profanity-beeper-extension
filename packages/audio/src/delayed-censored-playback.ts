@@ -114,7 +114,17 @@ async function createGraph(
   const shared = await acquireMediaGraph(media);
   const { context } = shared;
   setDelay(shared.delay, context, options.delaySeconds);
-  const tap = await createTap(context, options.workletUrl, listeners);
+  let tap: AudioNode;
+  try {
+    tap = await createTap(context, options.workletUrl, listeners);
+  } catch (error) {
+    // The shared graph already routes the media at this point. Restore its
+    // pass-through state before surfacing the arm failure.
+    setDelay(shared.delay, context, 0);
+    shared.gain.gain.cancelScheduledValues(context.currentTime);
+    shared.gain.gain.setValueAtTime(1, context.currentTime);
+    throw error;
+  }
   shared.source.connect(tap);
   return {
     context,

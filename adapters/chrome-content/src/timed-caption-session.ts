@@ -5,10 +5,9 @@ import {
   type CensorSettings,
 } from '@beeper/core';
 import type { SpeechRecognizer } from '@beeper/speech';
-import { createVoskSandboxSpeechRecognizer } from '@beeper/vosk';
 import {
   createDelayedVideoRenderer,
-  PlayerSelector,
+  findPlayerMedia,
   YoutubeTimedtextSource,
 } from '@beeper/youtube';
 
@@ -16,14 +15,11 @@ import type { TimedCensorSessionOptions } from './caption-beeper';
 import { SpeechTranscriptSource } from './speech-transcript-source';
 
 export type MlCensorSessionOptions = {
-  modelUrl: string;
-  sandboxUrl: string;
   workletUrl: string;
-  /** Shared recognizer instance; a new one per session would reload the model. */
-  recognizer?: SpeechRecognizer;
+  recognizer: SpeechRecognizer;
 };
 
-export function createTimedCaptionSessionOptions(
+export function createTimedtextCensorSessionOptions(
   settings: CensorSettings,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
@@ -41,12 +37,6 @@ export function createMlCensorSessionOptions(
   mlOptions: MlCensorSessionOptions,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  const recognizer =
-    mlOptions.recognizer ??
-    createVoskSandboxSpeechRecognizer({
-      modelUrl: mlOptions.modelUrl,
-      sandboxUrl: mlOptions.sandboxUrl,
-    });
   const playback = createDelayedCensoredPlayback(findPlayerMedia, {
     delaySeconds: settings.delaySeconds,
     beep: settings.effect === 'beep',
@@ -86,10 +76,11 @@ export function createMlCensorSessionOptions(
     },
   };
   return {
-    source: new SpeechTranscriptSource(recognizer, findPlayerMedia, playback.audioInput),
+    source: new SpeechTranscriptSource(mlOptions.recognizer, findPlayerMedia, playback.audioInput),
     lexicon: createCensorLexiconFromSettings(settings),
     executor,
     settings: { enabled: true },
+    armOnInteraction: true,
     onStatus,
   };
 }
@@ -98,8 +89,3 @@ type MlPlaybackExecutor = {
   arm(): Promise<void>;
   onError(listener: (error: unknown) => void): () => void;
 };
-
-function findPlayerMedia(): HTMLMediaElement | null {
-  const media = document.querySelector(PlayerSelector.VIDEO);
-  return media instanceof HTMLMediaElement ? media : null;
-}

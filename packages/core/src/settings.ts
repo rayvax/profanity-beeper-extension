@@ -29,6 +29,7 @@ export type CensorSettingsValidation =
 const DEFAULT_DELAY_SECONDS = 1.2;
 const MIN_DELAY_SECONDS = 0.6;
 const MAX_DELAY_SECONDS = 3;
+const MAX_PATTERN_LENGTH = 256;
 
 const DEFAULT_RUSSIAN_CENSOR_WORDS = [
   'блядь',
@@ -75,6 +76,11 @@ export function validateCensorSettings(value: unknown): CensorSettingsValidation
     settings.delaySeconds > MAX_DELAY_SECONDS
   ) {
     return { ok: false, error: 'Censor delay must be between 0.6 and 3 seconds' };
+  }
+
+  const overlongPattern = settings.patterns.find((pattern) => pattern.length > MAX_PATTERN_LENGTH);
+  if (overlongPattern) {
+    return { ok: false, error: `RegExp must not exceed ${MAX_PATTERN_LENGTH} characters` };
   }
 
   try {

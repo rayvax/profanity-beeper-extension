@@ -129,10 +129,19 @@ export function createBeepCensorExecutor(
         };
         scheduledRanges.add(scheduledRange);
 
-        // Without an armed graph the range waits for a user gesture; routing
-        // media audio through a suspended AudioContext would silence playback.
+        // Timedtext stays real-time: create its graph when the first range is
+        // known. A blocked context rejects below and the session fails open.
         if (graph && !media.paused) {
           scheduleRange(graph, scheduledRange, beep);
+        } else if (!graph) {
+          void ensureGraph(media).then(
+            (playbackGraph) => {
+              if (graph !== playbackGraph || !scheduledRanges.has(scheduledRange)) return;
+              listenTo(media);
+              if (!media.paused) scheduleRange(playbackGraph, scheduledRange, beep);
+            },
+            (error: unknown) => failRange(scheduledRange, error),
+          );
         }
       });
     },

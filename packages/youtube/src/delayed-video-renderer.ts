@@ -12,7 +12,7 @@ type BufferedFrame = {
   canvas: HTMLCanvasElement;
 };
 
-/** Renders video frames behind real time so the canvas matches delayed audio. */
+/** Renders video frames behind real time so the canvas matches delayed playback. */
 export function createDelayedVideoRenderer(
   video: HTMLVideoElement,
   options: DelayedVideoRendererOptions,

@@ -13,6 +13,7 @@ export type CensorControllerPorts = {
   save(settings: CensorSettings): Promise<void>;
   broadcast(settings: CensorSettings): Promise<void>;
   setActionStatus(tabId: number, status: CensorStatusValue): Promise<void>;
+  getActionStatus?(tabId: number): Promise<CensorStatusValue | undefined>;
 };
 
 export function registerCensorController(messaging: Messaging, ports: CensorControllerPorts): void {
@@ -65,6 +66,16 @@ export function registerCensorController(messaging: Messaging, ports: CensorCont
   });
 
   messaging.on(MessageType.GET_CENSOR_STATUS, (message, reply) => {
-    reply({ status: statuses.get(message.tabId) ?? CensorStatus.WAITING });
+    const status = statuses.get(message.tabId);
+    if (status || !ports.getActionStatus) {
+      reply({ status: status ?? CensorStatus.WAITING });
+      return;
+    }
+
+    void ports.getActionStatus(message.tabId).then(
+      (persistedStatus) => reply({ status: persistedStatus ?? CensorStatus.WAITING }),
+      () => reply({ status: CensorStatus.WAITING }),
+    );
+    return true;
   });
 }

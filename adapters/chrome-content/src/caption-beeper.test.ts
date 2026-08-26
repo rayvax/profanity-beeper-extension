@@ -13,7 +13,6 @@ import {
 import { startCaptionBeeper } from './caption-beeper';
 
 const WATCH_URL = 'https://www.youtube.com/watch?v=test123';
-const INDICATOR_SELECTOR = '[data-beeper-indicator]';
 
 class FakeTranscriptSource implements TranscriptSource {
   lastBindOptions: TranscriptSourceOptions | undefined;
@@ -73,20 +72,20 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function getIndicatorText(): string | undefined {
-  return document.querySelector(INDICATOR_SELECTOR)?.textContent ?? undefined;
-}
-
 describe('startCaptionBeeper', () => {
+  let originalConsoleError: typeof console.error;
+
   beforeAll(() => {
     GlobalRegistrator.register({ url: WATCH_URL });
   });
 
   beforeEach(() => {
+    originalConsoleError = console.error;
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
   });
 
   afterEach(() => {
+    console.error = originalConsoleError;
     document.body.innerHTML = '';
   });
 
@@ -100,7 +99,6 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(source.lastBindOptions).toBeDefined();
-    expect(getIndicatorText()).toBe('🧼');
   });
 
   test('transcript chunk sends WORD_CAPTURED through messaging', async () => {
@@ -196,6 +194,7 @@ describe('startCaptionBeeper', () => {
         lexicon: { matches: () => false },
         executor,
         settings: { enabled: true },
+        armOnInteraction: true,
         onStatus: (status) => statuses.push(status),
       },
     );
@@ -208,6 +207,26 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(executor.arm).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(['loading', 'working']);
+  });
+
+  test('does not gate timedtext playback on an interaction', async () => {
+    const source = new FakeTranscriptSource();
+    const executor = new ArmableCensorExecutor();
+    const statuses: string[] = [];
+    startCaptionBeeper(
+      createMessaging(async () => ({ ok: true, censored: false })),
+      {
+        source,
+        lexicon: { matches: () => false },
+        executor,
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
+    );
+    await flushMicrotasks();
+
+    expect(executor.arm).not.toHaveBeenCalled();
     expect(statuses).toEqual(['loading', 'working']);
   });
 
@@ -234,19 +253,26 @@ describe('startCaptionBeeper', () => {
     expect(statuses).toContain('error');
   });
 
-  test('bind failure shows error indicator', async () => {
+  test('bind failure reports an error status', async () => {
     const source = new FailingTranscriptSource();
     const errorSpy = mock(() => {});
+    const statuses: string[] = [];
 
     console.error = errorSpy;
     startCaptionBeeper(
       createMessaging(async () => ({ ok: true, censored: false })),
-      source,
+      {
+        source,
+        lexicon: { matches: () => false },
+        executor: { execute: mock(async () => {}) },
+        settings: { enabled: true },
+        onStatus: (status) => statuses.push(status),
+      },
     );
     await flushMicrotasks();
 
     expect(errorSpy).toHaveBeenCalled();
-    expect(getIndicatorText()).toBe('⚠️');
+    expect(statuses).toEqual(['loading', 'error']);
   });
 
   test('does not report a navigation abort as a censor error', async () => {
@@ -264,7 +290,6 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(statuses).toEqual(['loading']);
-    expect(getIndicatorText()).not.toBe('⚠️');
   });
 
   test('unbind stops transcript session on rebind', async () => {

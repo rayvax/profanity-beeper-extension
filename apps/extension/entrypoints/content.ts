@@ -1,36 +1,21 @@
 import {
-  createTimedCaptionSessionOptions,
+  createTimedtextCensorSessionOptions,
   CensorSource,
   CensorStatus,
   createDefaultCensorSettings,
   createMlCensorSessionOptions,
-  createVoskSandboxSpeechRecognizer,
   MessageType,
   startCaptionBeeper,
   type CensorSettings,
-  type SpeechRecognizer,
 } from '@beeper/adapter-chrome-content';
 import { chromeMessaging } from '../lib/chrome-messaging';
+import { getChromeVoskRecognizer } from '../lib/chrome-vosk-recognizer';
 
 export default defineContentScript({
   matches: ['*://www.youtube.com/*'],
   runAt: 'document_idle',
   async main() {
     let session: ReturnType<typeof startCaptionBeeper> | undefined;
-    // One recognizer per page: each instance loads the Vosk model (~44 MB).
-    let sharedRecognizer: SpeechRecognizer | undefined;
-    const getRecognizer = () => {
-      if (sharedRecognizer) return sharedRecognizer;
-
-      sharedRecognizer = createVoskSandboxSpeechRecognizer({
-        modelUrl: chrome.runtime.getURL('model/model.tar.gz'),
-        sandboxUrl: chrome.runtime.getURL('sandbox.html'),
-      });
-      // Keep the page-scoped model load independent from a session's abort
-      // signal, so a settings rebind cannot cancel the load for its successor.
-      void sharedRecognizer.preload().catch(() => undefined);
-      return sharedRecognizer;
-    };
     const start = (settings: CensorSettings) => {
       session?.stop();
       if (settings.source === CensorSource.ML) {
@@ -39,10 +24,8 @@ export default defineContentScript({
           createMlCensorSessionOptions(
             settings,
             {
-              modelUrl: chrome.runtime.getURL('model/model.tar.gz'),
-              sandboxUrl: chrome.runtime.getURL('sandbox.html'),
               workletUrl: chrome.runtime.getURL('audio-worklet.js'),
-              recognizer: getRecognizer(),
+              recognizer: getChromeVoskRecognizer(),
             },
             sendStatus,
           ),
@@ -50,7 +33,7 @@ export default defineContentScript({
       } else {
         session = startCaptionBeeper(
           chromeMessaging,
-          createTimedCaptionSessionOptions(settings, sendStatus),
+          createTimedtextCensorSessionOptions(settings, sendStatus),
         );
       }
     };

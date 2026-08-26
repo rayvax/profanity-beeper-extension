@@ -39,7 +39,11 @@ export function createVoskSandboxSpeechRecognizer(
     }
     if (event.data.type !== 'result' || !activeRecognition || !Array.isArray(event.data.words))
       return;
-    const words = toSpeechWords(event.data.words, activeRecognition.streamStartTime);
+    const words = toSpeechWords(
+      event.data.words,
+      activeRecognition.streamStartTime,
+      activeRecognition.playbackRate,
+    );
     if (words.length > 0) activeRecognition.options.onResult({ final: true, words });
   };
 
@@ -79,16 +83,27 @@ export function createVoskSandboxSpeechRecognizer(
       const active: ActiveRecognition = {
         options: recognitionOptions,
         streamStartTime: recognitionOptions.media.currentTime,
+        playbackRate: recognitionOptions.media.playbackRate,
         stop: () => {},
       };
       activeRecognition = active;
       let unsubscribe: (() => void) | undefined;
       let stopped = false;
+      let sampleRate: number | undefined;
+      const restartStream = () => {
+        if (stopped || sampleRate === undefined) return;
+        active.streamStartTime = recognitionOptions.media.currentTime;
+        active.playbackRate = recognitionOptions.media.playbackRate;
+        sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
+        sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
+      };
+      recognitionOptions.media.addEventListener('seeked', restartStream);
+      recognitionOptions.media.addEventListener('ratechange', restartStream);
       void recognitionOptions.audioInput.sampleRate
-        .then((sampleRate) => {
+        .then((resolvedSampleRate) => {
           if (stopped) return;
-          active.streamStartTime = recognitionOptions.media.currentTime;
-          sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
+          sampleRate = resolvedSampleRate;
+          restartStream();
           unsubscribe = recognitionOptions.audioInput?.subscribe((pcm) => {
             sandbox?.post({ target: 'bleep-sandbox', type: 'audio', pcm }, [pcm]);
           });
@@ -100,6 +115,8 @@ export function createVoskSandboxSpeechRecognizer(
       const stop = () => {
         if (stopped) return;
         stopped = true;
+        recognitionOptions.media.removeEventListener('seeked', restartStream);
+        recognitionOptions.media.removeEventListener('ratechange', restartStream);
         unsubscribe?.();
         sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
         if (activeRecognition === active) activeRecognition = undefined;
@@ -113,6 +130,7 @@ export function createVoskSandboxSpeechRecognizer(
 type ActiveRecognition = {
   options: SpeechRecognitionOptions;
   streamStartTime: number;
+  playbackRate: number;
   stop(): void;
 };
 
@@ -172,7 +190,11 @@ class VoskSandbox {
   }
 }
 
-function toSpeechWords(words: unknown[], streamStartTime: number): SpeechWord[] {
+function toSpeechWords(
+  words: unknown[],
+  streamStartTime: number,
+  playbackRate: number,
+): SpeechWord[] {
   return words.flatMap((word) => {
     if (typeof word !== 'object' || word === null) return [];
     const result = word as { word?: unknown; start?: unknown; end?: unknown };
@@ -189,8 +211,8 @@ function toSpeechWords(words: unknown[], streamStartTime: number): SpeechWord[] 
     return [
       {
         text: result.word,
-        startTime: streamStartTime + result.start,
-        endTime: streamStartTime + result.end,
+        startTime: streamStartTime + result.start * playbackRate,
+        endTime: streamStartTime + result.end * playbackRate,
       },
     ];
   });

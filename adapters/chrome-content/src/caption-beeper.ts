@@ -1,7 +1,6 @@
 import {
   createCensorRanges,
   MessageType,
-  PlayerIndicator,
   type CensorExecutor,
   type CensorLexicon,
   type Messaging,
@@ -26,23 +25,24 @@ export type TimedCensorSessionOptions = {
   lexicon: CensorLexicon;
   executor: CensorExecutor;
   settings: CensorSessionSettings;
+  armOnInteraction?: boolean;
   onStatus?: (status: CensorSessionStatus) => void;
 };
 
-export type CaptionBeeperSession = { stop(): void };
+export type TranscriptBeeperSession = { stop(): void };
 
 export function startCaptionBeeper(
   messaging: Messaging,
   source: TranscriptSource,
-): CaptionBeeperSession;
+): TranscriptBeeperSession;
 export function startCaptionBeeper(
   messaging: Messaging,
   options: TimedCensorSessionOptions,
-): CaptionBeeperSession;
+): TranscriptBeeperSession;
 export function startCaptionBeeper(
   messaging: Messaging,
   sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
-): CaptionBeeperSession {
+): TranscriptBeeperSession {
   console.info(`${LOG_PREFIX} injected at`, location.href);
 
   let options: TimedCensorSessionOptions | undefined;
@@ -55,14 +55,12 @@ export function startCaptionBeeper(
     source = sourceOrOptions;
   }
   let session: TranscriptSession | null = null;
-  let indicator: PlayerIndicator | null = null;
   let abortController: AbortController | null = null;
   let rebindTimer: ReturnType<typeof setTimeout> | undefined;
   let interactionHandler: (() => void) | undefined;
   let disposeExecutorError: (() => void) | undefined;
 
   function setStatus(status: CensorSessionStatus) {
-    indicator?.setState(status);
     options?.onStatus?.(status);
   }
 
@@ -70,8 +68,6 @@ export function startCaptionBeeper(
     session?.stop();
     session = null;
     options?.executor.stop?.();
-    indicator?.unmount();
-    indicator = null;
     abortController?.abort();
     abortController = null;
     if (interactionHandler) {
@@ -106,8 +102,6 @@ export function startCaptionBeeper(
       return;
     }
 
-    indicator = new PlayerIndicator();
-    indicator.mount(player);
     setStatus('loading');
 
     try {
@@ -128,7 +122,9 @@ export function startCaptionBeeper(
       }
 
       session = boundSession;
-      const armableExecutor = getArmableExecutor(options?.executor);
+      const armableExecutor = options?.armOnInteraction
+        ? getArmableExecutor(options.executor)
+        : undefined;
       const failureAwareExecutor = getFailureAwareExecutor(options?.executor);
       if (failureAwareExecutor) {
         disposeExecutorError = failureAwareExecutor.onError((error) =>

@@ -135,4 +135,28 @@ describe('registerCensorController', () => {
     });
     expect(getReply).toHaveBeenCalledWith({ settings: initial });
   });
+
+  test('recovers the tab status from the persistent action badge', async () => {
+    const { handlers, messaging } = createMessagingHarness();
+    const getActionStatus = mock(async () => CensorStatus.WORKING);
+    registerCensorController(messaging, {
+      load: async () => createDefaultCensorSettings(),
+      save: async () => {},
+      broadcast: async () => {},
+      setActionStatus: async () => {},
+      getActionStatus,
+    });
+
+    const reply = mock(() => {});
+    const keptOpen = handlers.get(MessageType.GET_CENSOR_STATUS)!(
+      { type: MessageType.GET_CENSOR_STATUS, tabId: 9 },
+      reply,
+      {},
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(keptOpen).toBeTrue();
+    expect(getActionStatus).toHaveBeenCalledWith(9);
+    expect(reply).toHaveBeenCalledWith({ status: CensorStatus.WORKING });
+  });
 });

@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@beeper/adapter-chrome-content": "workspace:*",
-    "@beeper/adapter-chrome-sw": "workspace:*"
+    "@beeper/adapter-chrome-sw": "workspace:*",
+    "@beeper/adapter-vosk-content": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

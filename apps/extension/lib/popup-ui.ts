@@ -55,11 +55,12 @@ async function main(): Promise<void> {
     return;
   }
   showSettings(settings);
-  if (tab?.id !== undefined) {
+  const activeTabId = tab?.id;
+  if (activeTabId !== undefined) {
     try {
       const result = await chromeMessaging.send({
         type: MessageType.GET_CENSOR_STATUS,
-        tabId: tab.id,
+        tabId: activeTabId,
       });
       status.textContent = result.status ?? 'waiting';
     } catch {
@@ -73,7 +74,9 @@ async function main(): Promise<void> {
       'type' in message &&
       message.type === MessageType.CENSOR_STATUS_UPDATED &&
       'status' in message &&
-      typeof message.status === 'string'
+      typeof message.status === 'string' &&
+      'tabId' in message &&
+      message.tabId === activeTabId
     ) {
       status.textContent = message.status;
     }

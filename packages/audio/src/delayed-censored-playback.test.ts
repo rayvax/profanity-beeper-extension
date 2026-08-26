@@ -119,4 +119,21 @@ describe('createDelayedCensoredPlayback', () => {
     expect(context.createMediaElementSource).toHaveBeenCalledTimes(1);
     expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(1.2, 10);
   });
+
+  test('restores pass-through audio when the recognition tap fails', async () => {
+    context.createScriptProcessor = mock(() => {
+      throw new Error('tap unavailable');
+    });
+    const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      beep: false,
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+
+    await expect(playback.arm()).rejects.toThrow('tap unavailable');
+
+    expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
+    expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, 10);
+  });
 });

@@ -43,8 +43,11 @@ export function createChromeCensorPorts(): CensorControllerPorts {
       await chrome.action.setBadgeText({ tabId, text: badgeText(status) });
       await chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor(status) });
       await chrome.runtime
-        .sendMessage({ type: MessageType.CENSOR_STATUS_UPDATED, status })
+        .sendMessage({ type: MessageType.CENSOR_STATUS_UPDATED, status, tabId })
         .catch(() => undefined);
+    },
+    async getActionStatus(tabId) {
+      return statusFromBadge(await chrome.action.getBadgeText({ tabId }));
     },
   };
 }
@@ -55,4 +58,11 @@ function badgeText(status: CensorStatusValue): string {
 
 function badgeColor(status: CensorStatusValue): string {
   return status === CensorStatus.ERROR ? '#b3261e' : '#1769aa';
+}
+
+function statusFromBadge(text: string): CensorStatusValue | undefined {
+  if (text === 'ON') return CensorStatus.WORKING;
+  if (text === '…') return CensorStatus.WAITING;
+  if (text === '!') return CensorStatus.ERROR;
+  return undefined;
 }

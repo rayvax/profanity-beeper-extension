@@ -27,6 +27,18 @@ describe('Censor settings', () => {
     expect(result).toEqual({ ok: false, error: 'Invalid RegExp: [' });
   });
 
+  test('rejects RegExp rules longer than the validation bound', () => {
+    const result = validateCensorSettings({
+      ...createDefaultCensorSettings(),
+      patterns: ['a'.repeat(257)],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'RegExp must not exceed 256 characters',
+    });
+  });
+
   test('lets the Whitelist override default and user Censor rules', () => {
     const lexicon = createCensorLexiconFromSettings({
       ...createDefaultCensorSettings(),
