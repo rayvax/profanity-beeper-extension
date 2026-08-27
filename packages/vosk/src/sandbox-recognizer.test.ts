@@ -69,10 +69,13 @@ describe('Vosk sandbox speech recognizer', () => {
       type: 'partial',
       text: 'черновик',
     });
-    expect(onResult).toHaveBeenCalledWith({
+    const partialResult = onResult.mock.calls[0]?.[0];
+    expect(partialResult).toMatchObject({
       final: false,
-      words: [{ text: 'черновик', startTime: 8.4, endTime: 10.2 }],
+      words: [{ text: 'черновик' }],
     });
+    expect(partialResult?.words[0]?.startTime).toBeCloseTo(8.8);
+    expect(partialResult?.words[0]?.endTime).toBeCloseTo(10.12);
     emitSandboxMessage(iframe, {
       source: 'bleep-sandbox',
       type: 'result',

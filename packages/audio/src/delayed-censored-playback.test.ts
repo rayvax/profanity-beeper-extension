@@ -84,6 +84,38 @@ describe('createDelayedCensoredPlayback', () => {
     expect(context.oscillator.stop.mock.calls[0]?.[0]).toBeCloseTo(12.35);
   });
 
+  test('uses a minimal pad for a provisional word estimate', async () => {
+    const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+
+    await playback.arm();
+    await playback.execute({ startTime: 10, endTime: 10.36, final: false });
+
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(11.18);
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(11.59);
+    expect(context.oscillator.stop.mock.calls[0]?.[0]).toBeCloseTo(11.58);
+  });
+
+  test('replaces a provisional window with the final timing for the same word', async () => {
+    const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+    await playback.arm();
+    await playback.execute({ startTime: 9.4, endTime: 10.06, final: false, token: 'дурак' });
+    context.gain.gain.linearRampToValueAtTime.mockClear();
+
+    await playback.execute({ startTime: 9.8, endTime: 10, final: true, token: 'дурак' });
+
+    expect(context.gain.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(10.85);
+  });
+
   test('restores immediate unmuted audio when stopped', async () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
     const playback = createDelayedCensoredPlayback(() => media, {

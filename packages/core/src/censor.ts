@@ -3,6 +3,10 @@ import type { TranscriptChunk } from './transcript';
 export type CensorRange = {
   startTime: number;
   endTime: number;
+  /** False only while ML recognition is still a provisional word estimate. */
+  final?: boolean;
+  /** Normalised ML token used to replace a provisional range once it is final. */
+  token?: string;
 };
 
 export type CensorExecutor = {
@@ -64,9 +68,15 @@ export function createCensorRanges(chunk: TranscriptChunk, lexicon: CensorLexico
     return [];
   }
 
-  const containsMatch = chunk.text.split(/\s+/u).some((token) => lexicon.matches(token));
+  const matchedToken = chunk.text.split(/\s+/u).find((token) => lexicon.matches(token));
+  if (!matchedToken) return [];
 
-  return containsMatch ? [{ startTime: chunk.startTime, endTime: chunk.endTime }] : [];
+  const range: CensorRange = { startTime: chunk.startTime, endTime: chunk.endTime };
+  if (chunk.final !== undefined) {
+    range.final = chunk.final;
+    range.token = normaliseCensorToken(matchedToken);
+  }
+  return [range];
 }
 
 function hasMediaTimelineInterval(

@@ -150,7 +150,12 @@ describe('startCaptionBeeper', () => {
     source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5, final: false });
     await flushMicrotasks();
 
-    expect(executor.execute).toHaveBeenCalledWith({ startTime: 4, endTime: 5 });
+    expect(executor.execute).toHaveBeenCalledWith({
+      startTime: 4,
+      endTime: 5,
+      final: false,
+      token: 'bad',
+    });
     expect(onTranscript).toHaveBeenCalledWith({
       chunk: { text: 'bad', startTime: 4, endTime: 5, final: false },
       censored: true,

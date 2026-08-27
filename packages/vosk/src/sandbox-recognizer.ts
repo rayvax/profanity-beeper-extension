@@ -13,8 +13,8 @@ type SandboxMessage = {
   words?: unknown;
 };
 
-const PARTIAL_LOOKBACK_SECONDS = 0.8;
-const PARTIAL_LOOKAHEAD_SECONDS = 0.1;
+const PARTIAL_LOOKBACK_SECONDS = 0.6;
+const PARTIAL_LOOKAHEAD_SECONDS = 0.06;
 
 export type VoskSandboxSpeechRecognizerOptions = {
   modelUrl: string;

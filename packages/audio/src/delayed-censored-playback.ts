@@ -9,6 +9,8 @@ import {
 export type DelayedCensorRange = {
   startTime: number;
   endTime: number;
+  final?: boolean;
+  token?: string;
 };
 
 export type PcmAudioInput = {
@@ -29,6 +31,7 @@ export type DelayedCensoredPlaybackOptions = {
   effect: CensorAudioEffectValue;
   workletUrl: string;
   paddingSeconds?: number;
+  provisionalPaddingSeconds?: number;
   mergeGapSeconds?: number;
 };
 
@@ -39,11 +42,17 @@ type PlaybackGraph = {
   delay: DelayNode;
   tap?: AudioNode;
   active: boolean;
-  windows: CensorAudioWindow[];
+  windows: ScheduledCensorWindow[];
   scheduler: CensorWindowScheduler;
 };
 
+type ScheduledCensorWindow = CensorAudioWindow & {
+  final?: boolean;
+  token?: string;
+};
+
 const DEFAULT_PADDING_SECONDS = 0.15;
+const DEFAULT_PROVISIONAL_PADDING_SECONDS = 0.02;
 const DEFAULT_MERGE_GAP_SECONDS = 0.05;
 const MIN_WINDOW_SECONDS = 0.05;
 
@@ -82,6 +91,7 @@ export function createDelayedCensoredPlayback(
         graph.windows = graph.windows
           .filter((window) => window.end > now)
           .map((window) => ({
+            ...window,
             start: window.start + delayDelta,
             end: window.end + delayDelta,
           }));
@@ -217,7 +227,10 @@ function scheduleCensorRange(
   options: DelayedCensoredPlaybackOptions,
 ): void {
   const now = graph.context.currentTime;
-  const padding = options.paddingSeconds ?? DEFAULT_PADDING_SECONDS;
+  const padding =
+    range.final === false
+      ? (options.provisionalPaddingSeconds ?? DEFAULT_PROVISIONAL_PADDING_SECONDS)
+      : (options.paddingSeconds ?? DEFAULT_PADDING_SECONDS);
   const start = Math.max(
     now + 0.005,
     now + range.startTime - graph.media.currentTime + options.delaySeconds - padding,
@@ -226,7 +239,12 @@ function scheduleCensorRange(
     start + MIN_WINDOW_SECONDS,
     now + range.endTime - graph.media.currentTime + options.delaySeconds + padding,
   );
-  graph.windows = [...graph.windows.filter((window) => window.end >= now), { start, end }];
+  const pending = graph.windows.filter((window) => window.end >= now);
+  graph.windows =
+    range.final && range.token
+      ? pending.filter((window) => window.final !== false || window.token !== range.token)
+      : pending;
+  graph.windows.push({ start, end, final: range.final, token: range.token });
   graph.scheduler.replace(graph.windows, options.effect);
 }
 

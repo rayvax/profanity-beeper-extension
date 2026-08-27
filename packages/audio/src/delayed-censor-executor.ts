@@ -1,6 +1,8 @@
 export type DelayedCensorRange = {
   startTime: number;
   endTime: number;
+  final?: boolean;
+  token?: string;
 };
 
 type CensorExecutor = {
@@ -80,5 +82,7 @@ function shiftRange(range: DelayedCensorRange, delaySeconds: number): DelayedCen
   return {
     startTime: range.startTime + delaySeconds,
     endTime: range.endTime + delaySeconds,
+    final: range.final,
+    token: range.token,
   };
 }
