@@ -44,51 +44,72 @@ export function startCaptionBeeper(
   messaging: Messaging,
   sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
 ): TranscriptBeeperSession {
-  console.info(`${LOG_PREFIX} injected at`, location.href);
+  return new CaptionBeeperSession(messaging, sourceOrOptions);
+}
 
-  let options: TimedCensorSessionOptions | undefined;
-  let source: TranscriptSource;
+class CaptionBeeperSession implements TranscriptBeeperSession {
+  private readonly options: TimedCensorSessionOptions | undefined;
+  private readonly source: TranscriptSource;
+  private session: TranscriptSession | null = null;
+  private abortController: AbortController | null = null;
+  private rebindTimer: ReturnType<typeof setTimeout> | undefined;
+  private interactionHandler: (() => void) | undefined;
+  private disposeExecutorError: (() => void) | undefined;
 
-  if (isTimedCensorSessionOptions(sourceOrOptions)) {
-    options = sourceOrOptions;
-    source = options.source;
-  } else {
-    source = sourceOrOptions;
-  }
-  let session: TranscriptSession | null = null;
-  let abortController: AbortController | null = null;
-  let rebindTimer: ReturnType<typeof setTimeout> | undefined;
-  let interactionHandler: (() => void) | undefined;
-  let disposeExecutorError: (() => void) | undefined;
-
-  function setStatus(status: CensorSessionStatus) {
-    options?.onStatus?.(status);
-  }
-
-  function unbind() {
-    session?.stop();
-    session = null;
-    options?.executor.stop?.();
-    abortController?.abort();
-    abortController = null;
-    if (interactionHandler) {
-      document.removeEventListener('pointerdown', interactionHandler, true);
-      document.removeEventListener('keydown', interactionHandler, true);
-      interactionHandler = undefined;
+  constructor(
+    private readonly messaging: Messaging,
+    sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
+  ) {
+    console.info(`${LOG_PREFIX} injected at`, location.href);
+    if (isTimedCensorSessionOptions(sourceOrOptions)) {
+      this.options = sourceOrOptions;
+      this.source = sourceOrOptions.source;
+    } else {
+      this.options = undefined;
+      this.source = sourceOrOptions;
     }
-    disposeExecutorError?.();
-    disposeExecutorError = undefined;
+    document.addEventListener('yt-navigate-finish', this.scheduleRebind);
+    void this.bind();
   }
 
-  async function bind() {
-    unbind();
+  updateSettings(settings: CensorSettings): void {
+    this.options?.updateSettings?.(settings);
+  }
+
+  stop(): void {
+    clearTimeout(this.rebindTimer);
+    document.removeEventListener('yt-navigate-finish', this.scheduleRebind);
+    this.unbind();
+  }
+
+  private setStatus(status: CensorSessionStatus): void {
+    this.options?.onStatus?.(status);
+  }
+
+  private unbind(): void {
+    this.session?.stop();
+    this.session = null;
+    this.options?.executor.stop?.();
+    this.abortController?.abort();
+    this.abortController = null;
+    if (this.interactionHandler) {
+      document.removeEventListener('pointerdown', this.interactionHandler, true);
+      document.removeEventListener('keydown', this.interactionHandler, true);
+      this.interactionHandler = undefined;
+    }
+    this.disposeExecutorError?.();
+    this.disposeExecutorError = undefined;
+  }
+
+  private async bind(): Promise<void> {
+    this.unbind();
 
     if (!isWatchPage()) {
       return;
     }
 
     const controller = new AbortController();
-    abortController = controller;
+    this.abortController = controller;
     const { signal } = controller;
 
     const player = await findElement(PlayerSelector.CONTAINER, {
@@ -96,66 +117,66 @@ export function startCaptionBeeper(
       signal,
     });
 
-    if (!player || signal.aborted || abortController !== controller) {
-      if (abortController === controller) {
-        unbind();
+    if (!player || signal.aborted || this.abortController !== controller) {
+      if (this.abortController === controller) {
+        this.unbind();
       }
       return;
     }
 
-    setStatus('loading');
+    this.setStatus('loading');
 
     try {
-      const boundSession = await source.bind({
+      const boundSession = await this.source.bind({
         onChunk: (chunk) => {
-          if (!signal.aborted && abortController === controller) {
-            void handleChunk(chunk, controller);
+          if (!signal.aborted && this.abortController === controller) {
+            void this.handleChunk(chunk, controller);
           }
         },
         signal,
-        onDetach: scheduleRebind,
-        onError: (error) => failSession(error, controller),
+        onDetach: this.scheduleRebind,
+        onError: (error) => this.failSession(error, controller),
       });
 
-      if (signal.aborted || abortController !== controller) {
+      if (signal.aborted || this.abortController !== controller) {
         boundSession.stop();
         return;
       }
 
-      session = boundSession;
-      const armableExecutor = options?.armOnInteraction
-        ? getArmableExecutor(options.executor)
+      this.session = boundSession;
+      const armableExecutor = this.options?.armOnInteraction
+        ? getArmableExecutor(this.options.executor)
         : undefined;
-      const failureAwareExecutor = getFailureAwareExecutor(options?.executor);
+      const failureAwareExecutor = getFailureAwareExecutor(this.options?.executor);
       if (failureAwareExecutor) {
-        disposeExecutorError = failureAwareExecutor.onError((error) =>
-          failSession(error, controller),
+        this.disposeExecutorError = failureAwareExecutor.onError((error) =>
+          this.failSession(error, controller),
         );
       }
       if (armableExecutor) {
         const armPlayback = () => {
-          if (interactionHandler) {
-            document.removeEventListener('pointerdown', interactionHandler, true);
-            document.removeEventListener('keydown', interactionHandler, true);
-            interactionHandler = undefined;
+          if (this.interactionHandler) {
+            document.removeEventListener('pointerdown', this.interactionHandler, true);
+            document.removeEventListener('keydown', this.interactionHandler, true);
+            this.interactionHandler = undefined;
           }
           void Promise.resolve(armableExecutor.arm()).then(
-            () => setStatus('working'),
-            (error: unknown) => failSession(error, controller),
+            () => this.setStatus('working'),
+            (error: unknown) => this.failSession(error, controller),
           );
         };
         if (navigator.userActivation?.hasBeenActive) {
           armPlayback();
         } else {
-          interactionHandler = armPlayback;
-          document.addEventListener('pointerdown', interactionHandler, true);
-          document.addEventListener('keydown', interactionHandler, true);
+          this.interactionHandler = armPlayback;
+          document.addEventListener('pointerdown', this.interactionHandler, true);
+          document.addEventListener('keydown', this.interactionHandler, true);
         }
       } else {
-        setStatus('working');
+        this.setStatus('working');
       }
     } catch (error) {
-      if (signal.aborted || abortController !== controller) {
+      if (signal.aborted || this.abortController !== controller) {
         return;
       }
       // Aborted fetches are navigation noise; a rebind follows on its own.
@@ -164,38 +185,38 @@ export function startCaptionBeeper(
       }
 
       console.error(`${LOG_PREFIX} bind failed`, error);
-      session = null;
-      setStatus('error');
+      this.session = null;
+      this.setStatus('error');
     }
   }
 
-  async function handleChunk(chunk: TranscriptChunk, controller: AbortController) {
-    if (options) {
+  private async handleChunk(chunk: TranscriptChunk, controller: AbortController): Promise<void> {
+    if (this.options) {
       try {
-        const ranges = createCensorRanges(chunk, options.lexicon);
-        options.onTranscript?.({ chunk, censored: ranges.length > 0 });
-        await Promise.all(ranges.map((range) => options.executor.execute(range)));
+        const ranges = createCensorRanges(chunk, this.options.lexicon);
+        this.options.onTranscript?.({ chunk, censored: ranges.length > 0 });
+        await Promise.all(ranges.map((range) => this.options?.executor.execute(range)));
       } catch (error) {
-        if (controller.signal.aborted || abortController !== controller) {
+        if (controller.signal.aborted || this.abortController !== controller) {
           return;
         }
 
         console.error(`${LOG_PREFIX} censor failed`, error);
-        options.executor.stop?.();
-        setStatus('error');
+        this.options.executor.stop?.();
+        this.setStatus('error');
       }
 
       return;
     }
 
-    const response = await messaging.send({
+    const response = await this.messaging.send({
       type: MessageType.WORD_CAPTURED,
       word: chunk.text,
     });
 
     if (
       !controller.signal.aborted &&
-      abortController === controller &&
+      this.abortController === controller &&
       response.ok &&
       response.censored
     ) {
@@ -203,32 +224,18 @@ export function startCaptionBeeper(
     }
   }
 
-  function failSession(error: unknown, controller: AbortController) {
-    if (controller.signal.aborted || abortController !== controller) return;
+  private failSession(error: unknown, controller: AbortController): void {
+    if (controller.signal.aborted || this.abortController !== controller) return;
     console.error(`${LOG_PREFIX} censor failed`, error);
-    options?.executor.stop?.();
-    setStatus('error');
+    this.options?.executor.stop?.();
+    this.setStatus('error');
   }
 
-  function scheduleRebind() {
-    clearTimeout(rebindTimer);
-    rebindTimer = setTimeout(() => {
-      void bind();
+  private readonly scheduleRebind = (): void => {
+    clearTimeout(this.rebindTimer);
+    this.rebindTimer = setTimeout(() => {
+      void this.bind();
     }, REBIND_DEBOUNCE_MS);
-  }
-
-  document.addEventListener('yt-navigate-finish', scheduleRebind);
-  void bind();
-
-  return {
-    updateSettings(settings) {
-      options?.updateSettings?.(settings);
-    },
-    stop() {
-      clearTimeout(rebindTimer);
-      document.removeEventListener('yt-navigate-finish', scheduleRebind);
-      unbind();
-    },
   };
 }
 

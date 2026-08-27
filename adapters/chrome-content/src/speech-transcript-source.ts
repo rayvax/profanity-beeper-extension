@@ -21,7 +21,8 @@ export class SpeechTranscriptSource implements TranscriptSource {
       audioInput: this.audioInput,
       signal: options.signal,
       onResult: (result) => {
-        result.words.forEach((word) => options.onChunk({ ...word, final: result.final }));
+        if (!result.final) return;
+        result.words.forEach((word) => options.onChunk(word));
       },
       onError: (error) => {
         console.error('[Caption Beeper] speech recognition failed', error);

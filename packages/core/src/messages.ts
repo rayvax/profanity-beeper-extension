@@ -58,7 +58,6 @@ export type MlTranscriptEntry = {
   text: string;
   startTime?: number;
   endTime?: number;
-  final: boolean;
   censored: boolean;
 };
 

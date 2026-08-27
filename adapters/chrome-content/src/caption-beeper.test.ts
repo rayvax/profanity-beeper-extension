@@ -147,17 +147,12 @@ describe('startCaptionBeeper', () => {
     });
     await flushMicrotasks();
 
-    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5, final: false });
+    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
     await flushMicrotasks();
 
-    expect(executor.execute).toHaveBeenCalledWith({
-      startTime: 4,
-      endTime: 5,
-      final: false,
-      token: 'bad',
-    });
+    expect(executor.execute).toHaveBeenCalledWith({ startTime: 4, endTime: 5 });
     expect(onTranscript).toHaveBeenCalledWith({
-      chunk: { text: 'bad', startTime: 4, endTime: 5, final: false },
+      chunk: { text: 'bad', startTime: 4, endTime: 5 },
       censored: true,
     });
     expect(send).not.toHaveBeenCalled();

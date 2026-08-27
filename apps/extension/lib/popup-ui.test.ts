@@ -73,7 +73,7 @@ describe('popup UI', () => {
     runtimeListener(
       {
         type: 'ML_TRANSCRIPT_UPDATED',
-        entry: { text: 'дурак', censored: true, final: false },
+        entry: { text: 'дурак', censored: true },
       },
       { tab: { id: 7 } },
     );

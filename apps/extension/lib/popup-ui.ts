@@ -132,17 +132,12 @@ function isMlTranscriptMessage(
     return false;
   }
   const entry = message.entry as Partial<MlTranscriptEntry>;
-  return (
-    typeof entry.text === 'string' &&
-    typeof entry.censored === 'boolean' &&
-    typeof entry.final === 'boolean'
-  );
+  return typeof entry.text === 'string' && typeof entry.censored === 'boolean';
 }
 
 function appendTranscriptEntry(entry: MlTranscriptEntry): void {
   mlTranscript.querySelector('[data-empty]')?.remove();
   const element = document.createElement('span');
-  element.classList.add(entry.final ? 'final' : 'partial');
   if (entry.censored) element.classList.add('censored');
   element.textContent = entry.text;
   if (entry.startTime !== undefined && entry.endTime !== undefined) {

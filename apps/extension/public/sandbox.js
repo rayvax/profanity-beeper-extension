@@ -99,10 +99,6 @@
         const r = (m && m.result) || {};
         post({ type: 'result', text: r.text || '', words: r.result || [] });
       });
-      recognizer.on('partialresult', (m) => {
-        post({ type: 'partial', text: (m && m.result && m.result.partial) || '' });
-      });
-
       post({ type: 'recognizer-ready' });
       return;
     }

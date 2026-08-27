@@ -13,9 +13,6 @@ type SandboxMessage = {
   words?: unknown;
 };
 
-const PARTIAL_LOOKBACK_SECONDS = 0.6;
-const PARTIAL_LOOKAHEAD_SECONDS = 0.06;
-
 export type VoskSandboxSpeechRecognizerOptions = {
   modelUrl: string;
   sandboxUrl: string;
@@ -26,125 +23,126 @@ export type VoskSandboxSpeechRecognizerOptions = {
 export function createVoskSandboxSpeechRecognizer(
   options: VoskSandboxSpeechRecognizerOptions,
 ): SpeechRecognizer {
-  const fetchModel = options.fetch ?? globalThis.fetch;
-  let sandbox: VoskSandbox | undefined;
-  let preloadPromise: Promise<void> | undefined;
-  let activeRecognition: ActiveRecognition | undefined;
+  return new VoskSandboxSpeechRecognizerImpl(options);
+}
 
-  const onMessage = (event: MessageEvent<SandboxMessage>) => {
-    if (!sandbox || event.source !== sandbox.window || event.data?.source !== 'bleep-sandbox')
+class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
+  private readonly fetchModel: typeof globalThis.fetch;
+  private sandbox: VoskSandbox | undefined;
+  private preloadPromise: Promise<void> | undefined;
+  private activeRecognition: ActiveRecognition | undefined;
+
+  constructor(private readonly options: VoskSandboxSpeechRecognizerOptions) {
+    this.fetchModel = options.fetch ?? globalThis.fetch;
+  }
+
+  preload(signal?: AbortSignal): Promise<void> {
+    if (this.preloadPromise) return this.preloadPromise;
+    const activeSandbox = new VoskSandbox(this.options.sandboxUrl);
+    this.sandbox = activeSandbox;
+    window.addEventListener('message', this.onMessage);
+    this.preloadPromise = activeSandbox.ready
+      .then(async () => {
+        const response = await this.fetchModel(this.options.modelUrl, { signal });
+        if (!response.ok) throw new Error(`Vosk model request failed (${response.status})`);
+        const model = await response.arrayBuffer();
+        const modelReady = activeSandbox.waitFor('model-ready', 'model-error');
+        activeSandbox.post({ target: 'bleep-sandbox', type: 'init', model }, [model]);
+        await modelReady;
+      })
+      .catch((error: unknown) => {
+        window.removeEventListener('message', this.onMessage);
+        activeSandbox.destroy();
+        if (this.sandbox === activeSandbox) this.sandbox = undefined;
+        this.preloadPromise = undefined;
+        throw error;
+      });
+    return this.preloadPromise;
+  }
+
+  async recognize(recognitionOptions: SpeechRecognitionOptions): Promise<SpeechRecognitionSession> {
+    if (!this.sandbox || !this.preloadPromise) throw new Error('Vosk model is not preloaded');
+    if (!recognitionOptions.audioInput) {
+      throw new Error('Vosk sandbox recognition requires a PCM audio input');
+    }
+    await this.preloadPromise;
+    this.activeRecognition?.stop();
+    const active: ActiveRecognition = {
+      options: recognitionOptions,
+      streamStartTime: recognitionOptions.media.currentTime,
+      playbackRate: recognitionOptions.media.playbackRate,
+      stop: () => {},
+    };
+    this.activeRecognition = active;
+    let unsubscribe: (() => void) | undefined;
+    let stopped = false;
+    let sampleRate: number | undefined;
+    const stopStream = () => {
+      this.sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
+    };
+    const restartStream = () => {
+      if (stopped || sampleRate === undefined) return;
+      stopStream();
+      if (recognitionOptions.media.paused) return;
+      active.streamStartTime = recognitionOptions.media.currentTime;
+      active.playbackRate = recognitionOptions.media.playbackRate;
+      this.sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
+    };
+    recognitionOptions.media.addEventListener('seeked', restartStream);
+    recognitionOptions.media.addEventListener('ratechange', restartStream);
+    recognitionOptions.media.addEventListener('play', restartStream);
+    recognitionOptions.media.addEventListener('pause', stopStream);
+    void recognitionOptions.audioInput.sampleRate
+      .then((resolvedSampleRate) => {
+        if (stopped) return;
+        sampleRate = resolvedSampleRate;
+        restartStream();
+        unsubscribe = recognitionOptions.audioInput?.subscribe((pcm) => {
+          this.sandbox?.post({ target: 'bleep-sandbox', type: 'audio', pcm }, [pcm]);
+        });
+      })
+      .catch((error: unknown) => {
+        if (!stopped) recognitionOptions.onError(error);
+      });
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      recognitionOptions.media.removeEventListener('seeked', restartStream);
+      recognitionOptions.media.removeEventListener('ratechange', restartStream);
+      recognitionOptions.media.removeEventListener('play', restartStream);
+      recognitionOptions.media.removeEventListener('pause', stopStream);
+      unsubscribe?.();
+      stopStream();
+      if (this.activeRecognition === active) this.activeRecognition = undefined;
+    };
+    active.stop = stop;
+    return { stop };
+  }
+
+  private readonly onMessage = (event: MessageEvent<SandboxMessage>) => {
+    if (
+      !this.sandbox ||
+      event.source !== this.sandbox.window ||
+      event.data?.source !== 'bleep-sandbox'
+    )
       return;
-    sandbox.receive(event.data);
+    this.sandbox.receive(event.data);
     if (event.data.type === 'model-error') {
-      activeRecognition?.options.onError(
+      this.activeRecognition?.options.onError(
         event.data.error ?? new Error('Vosk model failed to load'),
       );
       return;
     }
-    if (!activeRecognition) return;
-    if (event.data.type === 'partial' && typeof event.data.text === 'string') {
-      const words = toPartialSpeechWords(event.data.text, activeRecognition);
-      if (words.length > 0) activeRecognition.options.onResult({ final: false, words });
-      return;
-    }
+    if (!this.activeRecognition) return;
     if (event.data.type === 'result' && Array.isArray(event.data.words)) {
-      activeRecognition.partialTokens = [];
       const words = toSpeechWords(
         event.data.words,
-        activeRecognition.streamStartTime,
-        activeRecognition.playbackRate,
+        this.activeRecognition.streamStartTime,
+        this.activeRecognition.playbackRate,
       );
-      if (words.length > 0) activeRecognition.options.onResult({ final: true, words });
+      if (words.length > 0) this.activeRecognition.options.onResult({ final: true, words });
     }
-  };
-
-  return {
-    preload(signal) {
-      if (preloadPromise) return preloadPromise;
-      const activeSandbox = new VoskSandbox(options.sandboxUrl);
-      sandbox = activeSandbox;
-      window.addEventListener('message', onMessage);
-      preloadPromise = activeSandbox.ready
-        .then(async () => {
-          const response = await fetchModel(options.modelUrl, { signal });
-          if (!response.ok) throw new Error(`Vosk model request failed (${response.status})`);
-          const model = await response.arrayBuffer();
-          const modelReady = activeSandbox.waitFor('model-ready', 'model-error');
-          activeSandbox.post({ target: 'bleep-sandbox', type: 'init', model }, [model]);
-          await modelReady;
-        })
-        .catch((error: unknown) => {
-          window.removeEventListener('message', onMessage);
-          activeSandbox.destroy();
-          if (sandbox === activeSandbox) sandbox = undefined;
-          preloadPromise = undefined;
-          throw error;
-        });
-      return preloadPromise;
-    },
-    async recognize(
-      recognitionOptions: SpeechRecognitionOptions,
-    ): Promise<SpeechRecognitionSession> {
-      if (!sandbox || !preloadPromise) throw new Error('Vosk model is not preloaded');
-      if (!recognitionOptions.audioInput) {
-        throw new Error('Vosk sandbox recognition requires a PCM audio input');
-      }
-      await preloadPromise;
-      activeRecognition?.stop();
-      const active: ActiveRecognition = {
-        options: recognitionOptions,
-        streamStartTime: recognitionOptions.media.currentTime,
-        playbackRate: recognitionOptions.media.playbackRate,
-        partialTokens: [],
-        stop: () => {},
-      };
-      activeRecognition = active;
-      let unsubscribe: (() => void) | undefined;
-      let stopped = false;
-      let sampleRate: number | undefined;
-      const stopStream = () => {
-        sandbox?.post({ target: 'bleep-sandbox', type: 'stop' });
-      };
-      const restartStream = () => {
-        if (stopped || sampleRate === undefined) return;
-        stopStream();
-        if (recognitionOptions.media.paused) return;
-        active.streamStartTime = recognitionOptions.media.currentTime;
-        active.playbackRate = recognitionOptions.media.playbackRate;
-        active.partialTokens = [];
-        sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
-      };
-      recognitionOptions.media.addEventListener('seeked', restartStream);
-      recognitionOptions.media.addEventListener('ratechange', restartStream);
-      recognitionOptions.media.addEventListener('play', restartStream);
-      recognitionOptions.media.addEventListener('pause', stopStream);
-      void recognitionOptions.audioInput.sampleRate
-        .then((resolvedSampleRate) => {
-          if (stopped) return;
-          sampleRate = resolvedSampleRate;
-          restartStream();
-          unsubscribe = recognitionOptions.audioInput?.subscribe((pcm) => {
-            sandbox?.post({ target: 'bleep-sandbox', type: 'audio', pcm }, [pcm]);
-          });
-        })
-        .catch((error: unknown) => {
-          if (!stopped) recognitionOptions.onError(error);
-        });
-
-      const stop = () => {
-        if (stopped) return;
-        stopped = true;
-        recognitionOptions.media.removeEventListener('seeked', restartStream);
-        recognitionOptions.media.removeEventListener('ratechange', restartStream);
-        recognitionOptions.media.removeEventListener('play', restartStream);
-        recognitionOptions.media.removeEventListener('pause', stopStream);
-        unsubscribe?.();
-        stopStream();
-        if (activeRecognition === active) activeRecognition = undefined;
-      };
-      active.stop = stop;
-      return { stop };
-    },
   };
 }
 
@@ -152,7 +150,6 @@ type ActiveRecognition = {
   options: SpeechRecognitionOptions;
   streamStartTime: number;
   playbackRate: number;
-  partialTokens: string[];
   stop(): void;
 };
 
@@ -238,24 +235,4 @@ function toSpeechWords(
       },
     ];
   });
-}
-
-function toPartialSpeechWords(text: string, active: ActiveRecognition): SpeechWord[] {
-  const tokens = text.trim().split(/\s+/u).filter(Boolean);
-  let commonPrefixLength = 0;
-  while (
-    commonPrefixLength < tokens.length &&
-    tokens[commonPrefixLength] === active.partialTokens[commonPrefixLength]
-  ) {
-    commonPrefixLength += 1;
-  }
-  active.partialTokens = tokens;
-  const changedTokens = tokens.slice(commonPrefixLength);
-  if (changedTokens.length === 0) return [];
-
-  const playbackRate = active.options.media.playbackRate;
-  const currentTime = active.options.media.currentTime;
-  const startTime = Math.max(0, currentTime - PARTIAL_LOOKBACK_SECONDS * playbackRate);
-  const endTime = currentTime + PARTIAL_LOOKAHEAD_SECONDS * playbackRate;
-  return changedTokens.map((token) => ({ text: token, startTime, endTime }));
 }

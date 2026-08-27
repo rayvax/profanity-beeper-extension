@@ -35,19 +35,91 @@ export function createCensorAudioExecutor(
   getMedia: () => HTMLMediaElement | null,
   options: CensorAudioOptions = {},
 ): CensorAudioExecutor {
-  let effect = options.effect ?? CensorAudioEffect.BEEP;
-  let graph: PlaybackGraph | undefined;
-  let pendingGraph: { media: HTMLMediaElement; promise: Promise<PlaybackGraph> } | undefined;
-  const scheduledRanges = new Set<ScheduledRange>();
-  let listeningTo: HTMLMediaElement | undefined;
-  let generation = 0;
-  let waitingForPlayback = false;
+  return new CensorAudioExecutorImpl(getMedia, options);
+}
 
-  const reschedule = () => {
-    scheduledRanges.forEach((scheduledRange) => clearTimeout(scheduledRange.timer));
-    const currentGraph = graph;
-    if (!currentGraph || currentGraph.media.paused || waitingForPlayback) {
-      currentGraph?.scheduler.replace([], effect);
+class CensorAudioExecutorImpl implements CensorAudioExecutor {
+  private effect: CensorAudioEffectValue;
+  private graph: PlaybackGraph | undefined;
+  private pendingGraph: { media: HTMLMediaElement; promise: Promise<PlaybackGraph> } | undefined;
+  private readonly scheduledRanges = new Set<ScheduledRange>();
+  private listeningTo: HTMLMediaElement | undefined;
+  private generation = 0;
+  private waitingForPlayback = false;
+  private readonly playbackListeners: PlaybackListeners;
+
+  constructor(
+    private readonly getMedia: () => HTMLMediaElement | null,
+    options: CensorAudioOptions,
+  ) {
+    this.effect = options.effect ?? CensorAudioEffect.BEEP;
+    this.playbackListeners = {
+      reschedule: () => this.reschedule(),
+      suspend: () => {
+        this.waitingForPlayback = true;
+        this.reschedule();
+      },
+      resume: () => {
+        this.waitingForPlayback = false;
+        this.reschedule();
+      },
+    };
+  }
+
+  updateOptions(nextOptions: CensorAudioOptions): void {
+    this.effect = nextOptions.effect ?? CensorAudioEffect.BEEP;
+    this.reschedule();
+  }
+
+  async arm(): Promise<void> {
+    const media = this.getMedia();
+    if (!media) throw new Error('Player media not found');
+    const armGeneration = this.generation;
+    const playbackGraph = await this.ensureGraph(media);
+    // The graph was discarded as stale (stopped mid-arm); nothing to do.
+    if (armGeneration !== this.generation || this.graph !== playbackGraph) return;
+    this.listenTo(media);
+    this.reschedule();
+  }
+
+  async execute(range: MediaTimelineRange): Promise<void> {
+    const media = this.getMedia();
+    if (!media) throw new Error('Player media not found');
+    const executeGeneration = this.generation;
+    const scheduledRange: ScheduledRange = { range };
+    this.scheduledRanges.add(scheduledRange);
+
+    try {
+      // Timedtext stays real-time: create its graph when the first range is
+      // known. A blocked context rejects below and the session fails open.
+      const playbackGraph = await this.ensureGraph(media);
+      if (executeGeneration !== this.generation || this.graph !== playbackGraph) {
+        throw new Error('Censor executor stopped');
+      }
+      this.listenTo(media);
+      this.reschedule();
+    } catch (error) {
+      this.scheduledRanges.delete(scheduledRange);
+      throw error;
+    }
+  }
+
+  stop(): void {
+    this.generation += 1;
+    this.pendingGraph = undefined;
+    detachPlaybackListeners(this.listeningTo, this.playbackListeners);
+    this.listeningTo = undefined;
+    this.waitingForPlayback = false;
+    this.scheduledRanges.forEach((scheduledRange) => clearTimeout(scheduledRange.timer));
+    this.scheduledRanges.clear();
+    this.graph?.scheduler.stop();
+  }
+
+  private reschedule(): void {
+    this.scheduledRanges.forEach((scheduledRange) => clearTimeout(scheduledRange.timer));
+    const currentGraph = this.graph;
+    if (!currentGraph || currentGraph.media.paused || this.waitingForPlayback) {
+      currentGraph?.scheduler.replace([], this.effect);
       return;
     }
 
@@ -56,10 +128,10 @@ export function createCensorAudioExecutor(
     const playbackRate = currentGraph.media.playbackRate;
     const windows: CensorAudioWindow[] = [];
 
-    scheduledRanges.forEach((scheduledRange) => {
+    this.scheduledRanges.forEach((scheduledRange) => {
       const { range } = scheduledRange;
       if (range.endTime <= mediaTime) {
-        scheduledRanges.delete(scheduledRange);
+        this.scheduledRanges.delete(scheduledRange);
         return;
       }
       windows.push({
@@ -70,107 +142,47 @@ export function createCensorAudioExecutor(
         () => {
           // A wall-clock timeout may fire while YouTube is buffering. Keep the
           // range until the media timeline itself reaches its end.
-          reschedule();
+          this.reschedule();
         },
         Math.max(0, ((range.endTime - mediaTime) / playbackRate) * 1_000),
       );
     });
 
-    currentGraph.scheduler.replace(windows, effect);
-  };
+    currentGraph.scheduler.replace(windows, this.effect);
+  }
 
-  const listenTo = (media: HTMLMediaElement) => {
-    if (listeningTo === media) return;
-    detachPlaybackListeners(listeningTo, playbackListeners);
-    waitingForPlayback = false;
-    attachPlaybackListeners(media, playbackListeners);
-    listeningTo = media;
-  };
+  private listenTo(media: HTMLMediaElement): void {
+    if (this.listeningTo === media) return;
+    detachPlaybackListeners(this.listeningTo, this.playbackListeners);
+    this.waitingForPlayback = false;
+    attachPlaybackListeners(media, this.playbackListeners);
+    this.listeningTo = media;
+  }
 
-  const playbackListeners: PlaybackListeners = {
-    reschedule,
-    suspend() {
-      waitingForPlayback = true;
-      reschedule();
-    },
-    resume() {
-      waitingForPlayback = false;
-      reschedule();
-    },
-  };
-
-  const ensureGraph = (media: HTMLMediaElement): Promise<PlaybackGraph> => {
-    if (graph?.media === media) return Promise.resolve(graph);
-    if (pendingGraph?.media === media) return pendingGraph.promise;
+  private ensureGraph(media: HTMLMediaElement): Promise<PlaybackGraph> {
+    if (this.graph?.media === media) return Promise.resolve(this.graph);
+    if (this.pendingGraph?.media === media) return this.pendingGraph.promise;
 
     const entry = { media, promise: undefined as unknown as Promise<PlaybackGraph> };
-    const promise = createPlaybackGraph(graph, media).then(
+    const promise = createPlaybackGraph(this.graph, media).then(
       (createdGraph) => {
         // Stale creation (stopped or superseded mid-flight) never becomes the
         // active graph; the shared media graph stays cached for later sessions.
-        if (pendingGraph === entry) {
-          graph = createdGraph;
-          pendingGraph = undefined;
+        if (this.pendingGraph === entry) {
+          this.graph = createdGraph;
+          this.pendingGraph = undefined;
         }
         return createdGraph;
       },
       (error: unknown) => {
-        if (pendingGraph === entry) pendingGraph = undefined;
+        if (this.pendingGraph === entry) this.pendingGraph = undefined;
         throw error;
       },
     );
     entry.promise = promise;
-    pendingGraph = entry;
+    this.pendingGraph = entry;
     return promise;
-  };
-
-  return {
-    updateOptions(nextOptions) {
-      effect = nextOptions.effect ?? CensorAudioEffect.BEEP;
-      reschedule();
-    },
-    async arm() {
-      const media = getMedia();
-      if (!media) throw new Error('Player media not found');
-      const armGeneration = generation;
-      const playbackGraph = await ensureGraph(media);
-      // The graph was discarded as stale (stopped mid-arm); nothing to do.
-      if (armGeneration !== generation || graph !== playbackGraph) return;
-      listenTo(media);
-      reschedule();
-    },
-    async execute(range) {
-      const media = getMedia();
-      if (!media) throw new Error('Player media not found');
-      const executeGeneration = generation;
-      const scheduledRange: ScheduledRange = { range };
-      scheduledRanges.add(scheduledRange);
-
-      try {
-        // Timedtext stays real-time: create its graph when the first range is
-        // known. A blocked context rejects below and the session fails open.
-        const playbackGraph = await ensureGraph(media);
-        if (executeGeneration !== generation || graph !== playbackGraph) {
-          throw new Error('Censor executor stopped');
-        }
-        listenTo(media);
-        reschedule();
-      } catch (error) {
-        scheduledRanges.delete(scheduledRange);
-        throw error;
-      }
-    },
-    stop() {
-      generation += 1;
-      pendingGraph = undefined;
-      detachPlaybackListeners(listeningTo, playbackListeners);
-      listeningTo = undefined;
-      waitingForPlayback = false;
-      scheduledRanges.forEach((scheduledRange) => clearTimeout(scheduledRange.timer));
-      scheduledRanges.clear();
-      graph?.scheduler.stop();
-    },
-  };
+  }
 }
 
 async function createPlaybackGraph(

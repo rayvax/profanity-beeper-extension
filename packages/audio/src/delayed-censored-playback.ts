@@ -9,8 +9,6 @@ import {
 export type DelayedCensorRange = {
   startTime: number;
   endTime: number;
-  final?: boolean;
-  token?: string;
 };
 
 export type PcmAudioInput = {
@@ -31,7 +29,6 @@ export type DelayedCensoredPlaybackOptions = {
   effect: CensorAudioEffectValue;
   workletUrl: string;
   paddingSeconds?: number;
-  provisionalPaddingSeconds?: number;
   mergeGapSeconds?: number;
 };
 
@@ -42,17 +39,11 @@ type PlaybackGraph = {
   delay: DelayNode;
   tap?: AudioNode;
   active: boolean;
-  windows: ScheduledCensorWindow[];
+  windows: CensorAudioWindow[];
   scheduler: CensorWindowScheduler;
 };
 
-type ScheduledCensorWindow = CensorAudioWindow & {
-  final?: boolean;
-  token?: string;
-};
-
 const DEFAULT_PADDING_SECONDS = 0.15;
-const DEFAULT_PROVISIONAL_PADDING_SECONDS = 0.02;
 const DEFAULT_MERGE_GAP_SECONDS = 0.05;
 const MIN_WINDOW_SECONDS = 0.05;
 
@@ -64,77 +55,105 @@ export function createDelayedCensoredPlayback(
   getMedia: () => HTMLMediaElement | null,
   options: DelayedCensoredPlaybackOptions,
 ): DelayedCensoredPlayback {
-  const currentOptions = { ...options };
-  const listeners = new Set<(pcm: ArrayBuffer) => void>();
-  let sampleRatePromise = createPendingPromise<number>();
-  let graph: PlaybackGraph | undefined;
+  return new DelayedCensoredPlaybackImpl(getMedia, options);
+}
 
-  const audioInput: PcmAudioInput = {
-    get sampleRate() {
-      return sampleRatePromise.promise;
-    },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-  };
+class DelayedCensoredPlaybackImpl implements DelayedCensoredPlayback {
+  readonly audioInput: PcmAudioInput;
+  private readonly currentOptions: DelayedCensoredPlaybackOptions;
+  private readonly listeners = new Set<(pcm: ArrayBuffer) => void>();
+  private sampleRatePromise = createPendingPromise<number>();
+  private graph: PlaybackGraph | undefined;
 
-  return {
-    audioInput,
-    updateOptions(nextOptions) {
-      const delayDelta = nextOptions.delaySeconds - currentOptions.delaySeconds;
-      currentOptions.delaySeconds = nextOptions.delaySeconds;
-      currentOptions.effect = nextOptions.effect;
-      if (graph?.active) {
-        const now = graph.context.currentTime;
-        setDelay(graph.delay, graph.context, currentOptions.delaySeconds);
-        graph.windows = graph.windows
-          .filter((window) => window.end > now)
-          .map((window) => ({
-            ...window,
-            start: window.start + delayDelta,
-            end: window.end + delayDelta,
-          }));
-        graph.scheduler.replace(graph.windows, currentOptions.effect);
-      }
-    },
-    async arm() {
-      const media = getMedia();
-      if (!media) throw new Error('Player media not found');
+  constructor(
+    private readonly getMedia: () => HTMLMediaElement | null,
+    options: DelayedCensoredPlaybackOptions,
+  ) {
+    this.currentOptions = { ...options };
+    this.audioInput = new DelayedPlaybackAudioInput(
+      () => this.sampleRatePromise.promise,
+      this.listeners,
+    );
+  }
 
-      if (graph?.media !== media) {
-        graph = await createGraph(media, currentOptions, listeners);
-      } else if (!graph.active) {
-        setDelay(graph.delay, graph.context, currentOptions.delaySeconds);
-        graph.active = true;
-        graph.tap = await createTap(graph.context, options.workletUrl, listeners);
-        graph.source.connect(graph.tap);
-      }
+  updateOptions(
+    nextOptions: Pick<DelayedCensoredPlaybackOptions, 'delaySeconds' | 'effect'>,
+  ): void {
+    const delayDelta = nextOptions.delaySeconds - this.currentOptions.delaySeconds;
+    this.currentOptions.delaySeconds = nextOptions.delaySeconds;
+    this.currentOptions.effect = nextOptions.effect;
+    if (this.graph?.active) {
+      const now = this.graph.context.currentTime;
+      setDelay(this.graph.delay, this.graph.context, this.currentOptions.delaySeconds);
+      this.graph.windows = this.graph.windows
+        .filter((window) => window.end > now)
+        .map((window) => ({
+          ...window,
+          start: window.start + delayDelta,
+          end: window.end + delayDelta,
+        }));
+      this.graph.scheduler.replace(this.graph.windows, this.currentOptions.effect);
+    }
+  }
 
-      if (graph.context.state === 'suspended') {
-        await graph.context.resume();
-      }
-      sampleRatePromise.resolve(graph.context.sampleRate);
-    },
-    async execute(range) {
-      if (!graph?.active) {
-        throw new Error('Delayed playback is not armed');
-      }
-      scheduleCensorRange(graph, range, currentOptions);
-    },
-    stop() {
-      listeners.clear();
-      sampleRatePromise = createPendingPromise<number>();
-      if (!graph) return;
+  async arm(): Promise<void> {
+    const media = this.getMedia();
+    if (!media) throw new Error('Player media not found');
 
-      disconnectTap(graph);
-      graph.delay.delayTime.cancelScheduledValues(graph.context.currentTime);
-      graph.delay.delayTime.setValueAtTime(0, graph.context.currentTime);
-      graph.windows = [];
-      graph.scheduler.stop();
-      graph.active = false;
-    },
-  };
+    if (this.graph?.media !== media) {
+      this.graph = await createGraph(media, this.currentOptions, this.listeners);
+    } else if (!this.graph.active) {
+      setDelay(this.graph.delay, this.graph.context, this.currentOptions.delaySeconds);
+      this.graph.active = true;
+      this.graph.tap = await createTap(
+        this.graph.context,
+        this.currentOptions.workletUrl,
+        this.listeners,
+      );
+      this.graph.source.connect(this.graph.tap);
+    }
+
+    if (this.graph.context.state === 'suspended') {
+      await this.graph.context.resume();
+    }
+    this.sampleRatePromise.resolve(this.graph.context.sampleRate);
+  }
+
+  async execute(range: DelayedCensorRange): Promise<void> {
+    if (!this.graph?.active) {
+      throw new Error('Delayed playback is not armed');
+    }
+    scheduleCensorRange(this.graph, range, this.currentOptions);
+  }
+
+  stop(): void {
+    this.listeners.clear();
+    this.sampleRatePromise = createPendingPromise<number>();
+    if (!this.graph) return;
+
+    disconnectTap(this.graph);
+    this.graph.delay.delayTime.cancelScheduledValues(this.graph.context.currentTime);
+    this.graph.delay.delayTime.setValueAtTime(0, this.graph.context.currentTime);
+    this.graph.windows = [];
+    this.graph.scheduler.stop();
+    this.graph.active = false;
+  }
+}
+
+class DelayedPlaybackAudioInput implements PcmAudioInput {
+  constructor(
+    private readonly getSampleRate: () => Promise<number>,
+    private readonly listeners: Set<(pcm: ArrayBuffer) => void>,
+  ) {}
+
+  get sampleRate(): Promise<number> {
+    return this.getSampleRate();
+  }
+
+  subscribe(listener: (pcm: ArrayBuffer) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 }
 
 async function createGraph(
@@ -227,24 +246,20 @@ function scheduleCensorRange(
   options: DelayedCensoredPlaybackOptions,
 ): void {
   const now = graph.context.currentTime;
-  const padding =
-    range.final === false
-      ? (options.provisionalPaddingSeconds ?? DEFAULT_PROVISIONAL_PADDING_SECONDS)
-      : (options.paddingSeconds ?? DEFAULT_PADDING_SECONDS);
+  const padding = options.paddingSeconds ?? DEFAULT_PADDING_SECONDS;
+  const playbackRate = graph.media.playbackRate || 1;
   const start = Math.max(
     now + 0.005,
-    now + range.startTime - graph.media.currentTime + options.delaySeconds - padding,
+    now +
+      Math.max(0, (range.startTime - graph.media.currentTime) / playbackRate) +
+      options.delaySeconds -
+      padding,
   );
   const end = Math.max(
     start + MIN_WINDOW_SECONDS,
-    now + range.endTime - graph.media.currentTime + options.delaySeconds + padding,
+    now + (range.endTime - graph.media.currentTime) / playbackRate + options.delaySeconds + padding,
   );
-  const pending = graph.windows.filter((window) => window.end >= now);
-  graph.windows =
-    range.final && range.token
-      ? pending.filter((window) => window.final !== false || window.token !== range.token)
-      : pending;
-  graph.windows.push({ start, end, final: range.final, token: range.token });
+  graph.windows = [...graph.windows.filter((window) => window.end >= now), { start, end }];
   graph.scheduler.replace(graph.windows, options.effect);
 }
 
