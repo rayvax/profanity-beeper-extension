@@ -1,8 +1,18 @@
-import { MessageType, Messaging, type ExtensionMessage, type MessageTransport } from '@beeper/core';
+import {
+  MessageType,
+  Messaging,
+  type ExtensionMessage,
+  type MessageContext,
+  type MessageTransport,
+} from '@beeper/core';
 
 export function createFakeTransport(): MessageTransport & { sent: ExtensionMessage[] } {
   const listeners: Array<
-    (message: unknown, sendResponse: (response: unknown) => void) => boolean | void
+    (
+      message: unknown,
+      context: MessageContext,
+      sendResponse: (response: unknown) => void,
+    ) => boolean | void
   > = [];
   const sent: ExtensionMessage[] = [];
 
@@ -15,7 +25,7 @@ export function createFakeTransport(): MessageTransport & { sent: ExtensionMessa
         let handled = false;
 
         for (const listener of listeners) {
-          const result = listener(message, (response) => {
+          const result = listener(message, {}, (response) => {
             if (!handled) {
               handled = true;
               resolve(response);

@@ -18,7 +18,9 @@
       "name": "@beeper/adapter-chrome-content",
       "version": "0.0.0",
       "dependencies": {
+        "@beeper/audio": "workspace:*",
         "@beeper/core": "workspace:*",
+        "@beeper/speech": "workspace:*",
         "@beeper/youtube": "workspace:*",
       },
     },
@@ -30,12 +32,21 @@
         "@beeper/core": "workspace:*",
       },
     },
+    "adapters/vosk-content": {
+      "name": "@beeper/adapter-vosk-content",
+      "version": "0.0.0",
+      "dependencies": {
+        "@beeper/speech": "workspace:*",
+        "@beeper/vosk": "workspace:*",
+      },
+    },
     "apps/extension": {
       "name": "@beeper/extension",
       "version": "0.0.0",
       "dependencies": {
         "@beeper/adapter-chrome-content": "workspace:*",
         "@beeper/adapter-chrome-sw": "workspace:*",
+        "@beeper/adapter-vosk-content": "workspace:*",
       },
       "devDependencies": {
         "@types/chrome": "^0.0.287",
@@ -52,6 +63,17 @@
     "packages/core": {
       "name": "@beeper/core",
       "version": "0.0.0",
+    },
+    "packages/speech": {
+      "name": "@beeper/speech",
+      "version": "0.0.0",
+    },
+    "packages/vosk": {
+      "name": "@beeper/vosk",
+      "version": "0.0.0",
+      "dependencies": {
+        "@beeper/speech": "workspace:*",
+      },
     },
     "packages/youtube": {
       "name": "@beeper/youtube",
@@ -82,11 +104,17 @@
 
     "@beeper/adapter-chrome-sw": ["@beeper/adapter-chrome-sw@workspace:adapters/chrome-sw"],
 
+    "@beeper/adapter-vosk-content": ["@beeper/adapter-vosk-content@workspace:adapters/vosk-content"],
+
     "@beeper/audio": ["@beeper/audio@workspace:packages/audio"],
 
     "@beeper/core": ["@beeper/core@workspace:packages/core"],
 
     "@beeper/extension": ["@beeper/extension@workspace:apps/extension"],
+
+    "@beeper/speech": ["@beeper/speech@workspace:packages/speech"],
+
+    "@beeper/vosk": ["@beeper/vosk@workspace:packages/vosk"],
 
     "@beeper/youtube": ["@beeper/youtube@workspace:packages/youtube"],
 
