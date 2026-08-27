@@ -251,7 +251,7 @@ function scheduleCensorRange(
   const start = Math.max(
     now + 0.005,
     now +
-      Math.max(0, (range.startTime - graph.media.currentTime) / playbackRate) +
+      (range.startTime - graph.media.currentTime) / playbackRate +
       options.delaySeconds -
       padding,
   );

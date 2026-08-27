@@ -102,6 +102,24 @@ describe('createDelayedCensoredPlayback', () => {
     expect(context.oscillator.start.mock.calls[0]?.[0]).toBeCloseTo(16.05);
   });
 
+  test('censors a final result that arrives after the word begins in the media timeline', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 14,
+      playbackRate: 2,
+    }) as HTMLMediaElement;
+    const playback = createDelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'chrome-extension://test/audio-worklet.js',
+    });
+
+    await playback.arm();
+    await playback.execute({ startTime: 12, endTime: 14 });
+
+    expect(context.oscillator.start.mock.calls[0]?.[0]).toBeCloseTo(10.05);
+    expect(context.oscillator.stop.mock.calls[0]?.[0]).toBeCloseTo(11.35);
+  });
+
   test('keeps the configured delay after scaling an offset at 0.5×', async () => {
     const media = Object.assign(new EventTarget(), {
       currentTime: 10,
