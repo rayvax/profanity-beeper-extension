@@ -61,6 +61,11 @@ export function createDelayedVideoRenderer(
     options.onError(error);
   };
 
+  const resetTimeline = () => {
+    frames.splice(0).forEach((frame) => pool.push(frame.canvas));
+    output.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
   const capture = (_now?: number, metadata?: VideoFrameCallbackMetadata) => {
     if (!running) return;
     try {
@@ -113,6 +118,7 @@ export function createDelayedVideoRenderer(
     if (frameRequest !== undefined) clearTimeout(frameRequest);
     if (animationRequest !== undefined) cancelAnimationFrame(animationRequest);
     frames.splice(0).forEach((frame) => pool.push(frame.canvas));
+    video.removeEventListener('seeking', resetTimeline);
     canvas.remove();
     if (positionedContainer) container.style.position = originalContainerPosition;
     if (isolatedContainer) container.style.isolation = originalContainerIsolation;
@@ -121,6 +127,7 @@ export function createDelayedVideoRenderer(
   };
 
   syncCanvasGeometry(canvas, video);
+  video.addEventListener('seeking', resetTimeline);
   requestFrame();
   animationRequest = requestAnimationFrame(render);
   return { stop };

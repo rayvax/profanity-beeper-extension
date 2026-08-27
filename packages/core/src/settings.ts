@@ -51,6 +51,8 @@ const DEFAULT_RUSSIAN_CENSOR_WORDS = [
   'хуя',
   'хуйлан',
   'хуе',
+  'хуйло',
+  'бля',
 ] as const;
 
 // https://www.youtube.com/watch?v=wls9_A9WfJ8

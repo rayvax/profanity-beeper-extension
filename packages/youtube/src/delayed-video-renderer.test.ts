@@ -20,6 +20,7 @@ describe('createDelayedVideoRenderer', () => {
     originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
     HTMLCanvasElement.prototype.getContext = mock(() => ({
       drawImage: mock(() => {}),
+      clearRect: mock(() => {}),
     })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     globalThis.requestAnimationFrame = mock(() => 1);
     globalThis.cancelAnimationFrame = mock(() => {});
@@ -70,6 +71,7 @@ describe('createDelayedVideoRenderer', () => {
     const drawImage = mock(() => {});
     HTMLCanvasElement.prototype.getContext = mock(() => ({
       drawImage,
+      clearRect: mock(() => {}),
     })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     globalThis.requestAnimationFrame = mock((callback) => {
       render = callback;
@@ -121,6 +123,50 @@ describe('createDelayedVideoRenderer', () => {
     expect(canvas.style.left).toBe('80px');
     expect(canvas.style.top).toBe('45px');
 
+    renderer.stop();
+  });
+
+  test('drops frames from the old timeline after seeking backwards', () => {
+    document.body.innerHTML = '<div><video></video></div>';
+    const video = document.querySelector('video')!;
+    let capture: ((now: number, metadata: VideoFrameCallbackMetadata) => void) | undefined;
+    let render: FrameRequestCallback | undefined;
+    const drawImage = mock(() => {});
+    HTMLCanvasElement.prototype.getContext = mock(() => ({
+      drawImage,
+      clearRect: mock(() => {}),
+    })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    globalThis.requestAnimationFrame = mock((callback) => {
+      render = callback;
+      return 1;
+    });
+    Object.defineProperties(video, {
+      currentTime: { configurable: true, value: 20, writable: true },
+      paused: { configurable: true, value: false },
+      playbackRate: { configurable: true, value: 1 },
+      videoWidth: { configurable: true, value: 320 },
+      videoHeight: { configurable: true, value: 180 },
+      requestVideoFrameCallback: {
+        configurable: true,
+        value: mock((callback) => {
+          capture = callback;
+          return 1;
+        }),
+      },
+    });
+
+    const renderer = createDelayedVideoRenderer(video, {
+      delaySeconds: 2,
+      onError: mock(() => {}),
+    });
+    capture?.(0, { mediaTime: 20 } as VideoFrameCallbackMetadata);
+    video.currentTime = 5;
+    video.dispatchEvent(new Event('seeking'));
+    capture?.(0, { mediaTime: 5 } as VideoFrameCallbackMetadata);
+    video.currentTime = 7;
+    render?.(0);
+
+    expect(drawImage).toHaveBeenCalledTimes(3);
     renderer.stop();
   });
 });
