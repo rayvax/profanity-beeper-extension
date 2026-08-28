@@ -5,7 +5,14 @@ import {
   type TranscriptSession,
   type TranscriptSource,
 } from '@beeper/core';
-import { findElement, isWatchPage, PlayerSelector, signalPlayer } from '@beeper/youtube';
+import {
+  findElement,
+  getVideoIdFromUrl,
+  isWatchPage,
+  PlayerSelector,
+  signalPlayer,
+  YoutubeEvent,
+} from '@beeper/youtube';
 
 const LOG_PREFIX = '[Caption Beeper]';
 const REBIND_DEBOUNCE_MS = 150;
@@ -37,7 +44,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
       return;
     }
 
-    const videoId = new URLSearchParams(location.search).get('v');
+    const videoId = getVideoIdFromUrl();
     abortController = new AbortController();
     const { signal } = abortController;
 
@@ -92,10 +99,10 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
   }
 
   function scheduleRebind(reason: string) {
-    const videoId = new URLSearchParams(location.search).get('v');
+    const videoId = getVideoIdFromUrl();
     // Same watch page: YouTube often fires yt-navigate-finish after initial bind.
     // Skip full teardown/rebind so the indicator does not flash loading again.
-    if (reason === 'yt-navigate-finish' && videoId && videoId === boundVideoId) {
+    if (reason === YoutubeEvent.NAVIGATE_FINISH && videoId && videoId === boundVideoId) {
       return;
     }
 
@@ -105,6 +112,8 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
     }, REBIND_DEBOUNCE_MS);
   }
 
-  document.addEventListener('yt-navigate-finish', () => scheduleRebind('yt-navigate-finish'));
+  document.addEventListener(YoutubeEvent.NAVIGATE_FINISH, () =>
+    scheduleRebind(YoutubeEvent.NAVIGATE_FINISH),
+  );
   void bind();
 }

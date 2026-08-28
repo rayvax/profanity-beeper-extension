@@ -6,3 +6,6 @@ export {
   STATIC_MATCH_CONFIG,
   type ChunkMatcherLike,
 } from './chunk-captured-handler';
+export { LiveChunkMatcher } from './live-chunk-matcher';
+export { MatchConfigResolver } from './match-config-resolver';
+export type { StoragePort } from './match-config-resolver';

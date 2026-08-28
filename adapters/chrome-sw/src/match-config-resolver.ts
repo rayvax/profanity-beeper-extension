@@ -1,6 +1,9 @@
-import { ChunkMatcher, type MatchConfig } from '@beeper/adapter-chrome-sw';
+import type { MatchConfig } from '@beeper/core';
 
-import type { StoragePort } from './chrome-storage';
+export type StoragePort = {
+  get: (keys: string[]) => Promise<Record<string, unknown>>;
+  set: (items: Record<string, unknown>) => Promise<void>;
+};
 
 export type MatchConfigMeta = {
   configSha: string;
@@ -12,9 +15,9 @@ export type MatchConfigStore = {
 };
 
 export type MatchConfigResolverDeps = {
-  fetch: typeof fetch;
+  fetch: (url: string) => Promise<Response>;
   storage: StoragePort;
-  getLanguage: () => string;
+  language: string;
   owner?: string;
   repo?: string;
   branch?: string;
@@ -29,9 +32,9 @@ const STORAGE_META_KEY = 'matchConfigMeta';
 const STORAGE_CONFIG_KEY = 'matchConfig';
 
 export class MatchConfigResolver {
-  private readonly fetch: typeof fetch;
+  private readonly fetch: (url: string) => Promise<Response>;
   private readonly storage: StoragePort;
-  private readonly getLanguage: () => string;
+  private readonly language: string;
   private readonly owner: string;
   private readonly repo: string;
   private readonly branch: string;
@@ -40,7 +43,7 @@ export class MatchConfigResolver {
   constructor(deps: MatchConfigResolverDeps) {
     this.fetch = deps.fetch;
     this.storage = deps.storage;
-    this.getLanguage = deps.getLanguage;
+    this.language = deps.language;
     this.owner = deps.owner ?? DEFAULT_OWNER;
     this.repo = deps.repo ?? DEFAULT_REPO;
     this.branch = deps.branch ?? DEFAULT_BRANCH;
@@ -70,7 +73,7 @@ export class MatchConfigResolver {
       return;
     }
 
-    const lang = this.resolveLanguageTag(this.getLanguage());
+    const lang = this.resolveLanguageTag(this.language);
     let config: MatchConfig | null;
     try {
       config = await this.fetchMatchDefaults(lang);
@@ -92,12 +95,12 @@ export class MatchConfigResolver {
     });
   }
 
-  async getEffectiveConfig(): Promise<MatchConfig> {
+  async getConfig(): Promise<MatchConfig> {
     const stored = (await this.storage.get([STORAGE_CONFIG_KEY])) as {
       matchConfig?: MatchConfigStore;
     };
 
-    const lang = this.resolveLanguageTag(this.getLanguage());
+    const lang = this.resolveLanguageTag(this.language);
     const store = stored.matchConfig;
 
     if (store?.user?.[lang]) {
@@ -150,43 +153,6 @@ export class MatchConfigResolver {
     }
     const body: unknown = await response.json();
     return parseMatchConfig(body);
-  }
-}
-
-export class LiveChunkMatcher {
-  private matcher: ChunkMatcher;
-  private readonly resolver: MatchConfigResolver;
-  private pendingReload: Promise<void> = Promise.resolve();
-
-  private constructor(resolver: MatchConfigResolver, matcher: ChunkMatcher) {
-    this.resolver = resolver;
-    this.matcher = matcher;
-  }
-
-  static async create(
-    resolver: MatchConfigResolver,
-    onStorageChanged?: (listener: () => void) => () => void,
-  ): Promise<LiveChunkMatcher> {
-    const live = new LiveChunkMatcher(
-      resolver,
-      new ChunkMatcher(await resolver.getEffectiveConfig()),
-    );
-    onStorageChanged?.(() => {
-      live.pendingReload = live.reload();
-    });
-    return live;
-  }
-
-  async reload(): Promise<void> {
-    this.matcher = new ChunkMatcher(await this.resolver.getEffectiveConfig());
-  }
-
-  async whenIdle(): Promise<void> {
-    await this.pendingReload;
-  }
-
-  matches(text: string): boolean {
-    return this.matcher.matches(text);
   }
 }
 

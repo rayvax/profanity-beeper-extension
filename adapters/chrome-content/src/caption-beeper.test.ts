@@ -7,6 +7,8 @@ import {
   type TranscriptSourceOptions,
 } from '@beeper/core';
 
+import { YoutubeEvent } from '@beeper/youtube';
+
 import { startCaptionBeeper } from './caption-beeper';
 
 const INDICATOR_SELECTOR = '[data-beeper-indicator]';
@@ -102,7 +104,7 @@ describe('startCaptionBeeper', () => {
 
     // Different video id: same-page yt-navigate-finish must rebind.
     window.history.pushState({}, '', '/watch?v=other456');
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).toHaveBeenCalled();
@@ -118,7 +120,7 @@ describe('startCaptionBeeper', () => {
 
     expect(getIndicatorText()).toBe('🧼');
 
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).not.toHaveBeenCalled();

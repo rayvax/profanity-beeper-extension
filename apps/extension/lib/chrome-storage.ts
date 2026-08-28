@@ -1,7 +1,4 @@
-export type StoragePort = {
-  get: (keys: string[]) => Promise<Record<string, unknown>>;
-  set: (items: Record<string, unknown>) => Promise<void>;
-};
+import type { StoragePort } from '@beeper/adapter-chrome-sw';
 
 export const chromeStorage: StoragePort = {
   get: (keys) => chrome.storage.local.get(keys),

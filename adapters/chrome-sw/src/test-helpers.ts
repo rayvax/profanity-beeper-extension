@@ -1,5 +1,7 @@
 import { MessageType, Messaging, type ExtensionMessage, type MessageTransport } from '@beeper/core';
 
+import type { StoragePort } from './match-config-resolver';
+
 export function createFakeTransport(): MessageTransport & { sent: ExtensionMessage[] } {
   const listeners: Array<
     (message: unknown, sendResponse: (response: unknown) => void) => boolean | void
@@ -40,6 +42,25 @@ export function createFakeTransport(): MessageTransport & { sent: ExtensionMessa
           listeners.splice(index, 1);
         }
       };
+    },
+  };
+}
+
+export function createMemoryStorage(initial: Record<string, unknown> = {}): StoragePort {
+  const data = { ...initial };
+
+  return {
+    get: async (keys) => {
+      const result: Record<string, unknown> = {};
+      for (const key of keys) {
+        if (key in data) {
+          result[key] = data[key];
+        }
+      }
+      return result;
+    },
+    set: async (items) => {
+      Object.assign(data, items);
     },
   };
 }

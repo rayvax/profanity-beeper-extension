@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import type { MatchConfig } from '@beeper/adapter-chrome-sw';
+import type { MatchConfig } from '@beeper/core';
 
-import type { StoragePort } from './chrome-storage';
-import { LiveChunkMatcher, MatchConfigResolver } from './match-config-resolver';
+import { MatchConfigResolver } from './match-config-resolver';
+import { createMemoryStorage } from './test-helpers';
 
 const cachedRemote: MatchConfig = {
   patterns: ['cached-pattern'],
@@ -13,25 +13,6 @@ const fetchedRemote: MatchConfig = {
   patterns: ['fetched-pattern'],
   terms: ['fetched-term'],
 };
-
-function createMemoryStorage(initial: Record<string, unknown> = {}): StoragePort {
-  const data = { ...initial };
-
-  return {
-    get: async (keys) => {
-      const result: Record<string, unknown> = {};
-      for (const key of keys) {
-        if (key in data) {
-          result[key] = data[key];
-        }
-      }
-      return result;
-    },
-    set: async (items) => {
-      Object.assign(data, items);
-    },
-  };
-}
 
 function jsonResponse(body: unknown, ok = true): Response {
   return new Response(JSON.stringify(body), {
@@ -47,7 +28,7 @@ describe('MatchConfigResolver', () => {
       matchConfig: { remote: { en: cachedRemote }, user: {} },
     });
     const calls: string[] = [];
-    const fetchFn: typeof fetch = async (input) => {
+    const fetchFn = async (input: string) => {
       calls.push(String(input));
       if (String(input).includes('api.github.com')) {
         return jsonResponse([{ sha: 'sha-same' }]);
@@ -58,11 +39,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
       storage,
-      getLanguage: () => 'en',
+      language: 'en',
     });
 
     await resolver.refresh();
-    const config = await resolver.getEffectiveConfig();
+    const config = await resolver.getConfig();
 
     expect(config).toEqual(cachedRemote);
     expect(calls).toHaveLength(1);
@@ -75,7 +56,7 @@ describe('MatchConfigResolver', () => {
       matchConfig: { remote: { en: cachedRemote }, user: {} },
     });
     const calls: string[] = [];
-    const fetchFn: typeof fetch = async (input) => {
+    const fetchFn = async (input: string) => {
       const url = String(input);
       calls.push(url);
       if (url.includes('api.github.com')) {
@@ -90,11 +71,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
       storage,
-      getLanguage: () => 'en',
+      language: 'en',
     });
 
     await resolver.refresh();
-    const config = await resolver.getEffectiveConfig();
+    const config = await resolver.getConfig();
 
     expect(config).toEqual(fetchedRemote);
     expect(calls.some((url) => url.includes('match-defaults/en.json'))).toBe(true);
@@ -112,7 +93,7 @@ describe('MatchConfigResolver', () => {
       matchConfigMeta: { configSha: 'sha-old' },
       matchConfig: { remote: { en: cachedRemote }, user: {} },
     });
-    const fetchFn: typeof fetch = async (input) => {
+    const fetchFn = async (input: string) => {
       const url = String(input);
       if (url.includes('api.github.com')) {
         return jsonResponse([{ sha: 'sha-new' }]);
@@ -126,11 +107,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
       storage,
-      getLanguage: () => 'en',
+      language: 'en',
     });
 
     await resolver.refresh();
-    const config = await resolver.getEffectiveConfig();
+    const config = await resolver.getConfig();
 
     expect(config).toEqual(cachedRemote);
   });
@@ -148,11 +129,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
       storage,
-      getLanguage: () => 'en',
+      language: 'en',
     });
 
     await resolver.refresh();
-    expect(await resolver.getEffectiveConfig()).toEqual(userConfig);
+    expect(await resolver.getConfig()).toEqual(userConfig);
   });
 
   test('missing language falls back to English remote', async () => {
@@ -164,11 +145,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
       storage,
-      getLanguage: () => 'ru-RU',
+      language: 'ru-RU',
     });
 
     await resolver.refresh();
-    expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
+    expect(await resolver.getConfig()).toEqual(cachedRemote);
   });
 
   test('resolves active language from browser locale primary subtag', async () => {
@@ -184,11 +165,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
       storage,
-      getLanguage: () => 'ru-RU',
+      language: 'ru-RU',
     });
 
     await resolver.refresh();
-    expect(await resolver.getEffectiveConfig()).toEqual(remoteRu);
+    expect(await resolver.getConfig()).toEqual(remoteRu);
   });
 
   test('falls back to en when locale has no primary subtag', async () => {
@@ -200,11 +181,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
       storage,
-      getLanguage: () => '',
+      language: '',
     });
 
     await resolver.refresh();
-    expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
+    expect(await resolver.getConfig()).toEqual(cachedRemote);
   });
 
   test('returns to remote defaults after user override reset', async () => {
@@ -220,11 +201,11 @@ describe('MatchConfigResolver', () => {
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
       storage,
-      getLanguage: () => 'en-US',
+      language: 'en-US',
     });
 
     await resolver.refresh();
-    expect(await resolver.getEffectiveConfig()).toEqual(userConfig);
+    expect(await resolver.getConfig()).toEqual(userConfig);
 
     const stored = (await storage.get(['matchConfig'])) as {
       matchConfig: { remote: Record<string, MatchConfig>; user: Record<string, MatchConfig> };
@@ -232,46 +213,6 @@ describe('MatchConfigResolver', () => {
     delete stored.matchConfig.user.en;
     await storage.set({ matchConfig: stored.matchConfig });
 
-    expect(await resolver.getEffectiveConfig()).toEqual(cachedRemote);
-  });
-
-  test('LiveChunkMatcher picks up reset after storage change', async () => {
-    const userConfig: MatchConfig = { patterns: [], terms: ['override-term'] };
-    const storage = createMemoryStorage({
-      matchConfigMeta: { configSha: 'sha-same' },
-      matchConfig: {
-        remote: { en: cachedRemote },
-        user: { en: userConfig },
-      },
-    });
-
-    let notify: (() => void) | undefined;
-    const onStorageChanged = (listener: () => void) => {
-      notify = listener;
-      return () => {
-        notify = undefined;
-      };
-    };
-
-    const resolver = new MatchConfigResolver({
-      fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
-      getLanguage: () => 'en',
-    });
-
-    const matcher = await LiveChunkMatcher.create(resolver, onStorageChanged);
-    expect(matcher.matches('say override-term now')).toBe(true);
-
-    const stored = (await storage.get(['matchConfig'])) as {
-      matchConfig: { remote: Record<string, MatchConfig>; user: Record<string, MatchConfig> };
-    };
-    delete stored.matchConfig.user.en;
-    await storage.set({ matchConfig: stored.matchConfig });
-    expect(notify).toBeDefined();
-    notify?.();
-    await matcher.whenIdle();
-
-    expect(matcher.matches('say override-term now')).toBe(false);
-    expect(matcher.matches('say cached-term now')).toBe(true);
+    expect(await resolver.getConfig()).toEqual(cachedRemote);
   });
 });
