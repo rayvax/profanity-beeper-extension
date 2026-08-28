@@ -18,6 +18,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
   let indicator: PlayerIndicator | null = null;
   let abortController: AbortController | null = null;
   let rebindTimer: ReturnType<typeof setTimeout> | undefined;
+  let boundVideoId: string | null = null;
 
   function unbind() {
     session?.stop();
@@ -26,6 +27,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
     indicator = null;
     abortController?.abort();
     abortController = null;
+    boundVideoId = null;
   }
 
   async function bind() {
@@ -35,6 +37,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
       return;
     }
 
+    const videoId = new URLSearchParams(location.search).get('v');
     abortController = new AbortController();
     const { signal } = abortController;
 
@@ -67,7 +70,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
           })();
         },
         signal,
-        onDetach: scheduleRebind,
+        onDetach: () => scheduleRebind('onDetach'),
       });
 
       if (signal.aborted) {
@@ -76,6 +79,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
       }
 
       indicator.setState('working');
+      boundVideoId = videoId;
     } catch (error) {
       if (signal.aborted) {
         return;
@@ -87,13 +91,20 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
     }
   }
 
-  function scheduleRebind() {
+  function scheduleRebind(reason: string) {
+    const videoId = new URLSearchParams(location.search).get('v');
+    // Same watch page: YouTube often fires yt-navigate-finish after initial bind.
+    // Skip full teardown/rebind so the indicator does not flash loading again.
+    if (reason === 'yt-navigate-finish' && videoId && videoId === boundVideoId) {
+      return;
+    }
+
     clearTimeout(rebindTimer);
     rebindTimer = setTimeout(() => {
       void bind();
     }, REBIND_DEBOUNCE_MS);
   }
 
-  document.addEventListener('yt-navigate-finish', scheduleRebind);
+  document.addEventListener('yt-navigate-finish', () => scheduleRebind('yt-navigate-finish'));
   void bind();
 }

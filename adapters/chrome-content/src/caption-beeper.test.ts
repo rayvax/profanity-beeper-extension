@@ -45,6 +45,7 @@ function getIndicatorText(): string | undefined {
 describe('startCaptionBeeper', () => {
   beforeEach(() => {
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
+    window.history.pushState({}, '', '/watch?v=test123');
   });
 
   test('binds injected transcript source on watch page', async () => {
@@ -99,10 +100,29 @@ describe('startCaptionBeeper', () => {
     );
     await flushMicrotasks();
 
+    // Different video id: same-page yt-navigate-finish must rebind.
+    window.history.pushState({}, '', '/watch?v=other456');
     document.dispatchEvent(new Event('yt-navigate-finish'));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).toHaveBeenCalled();
+  });
+
+  test('same-video yt-navigate-finish does not rebind', async () => {
+    const source = new FakeTranscriptSource();
+    startCaptionBeeper(
+      stubMessaging(async () => ({ ok: true, censored: false })),
+      source,
+    );
+    await flushMicrotasks();
+
+    expect(getIndicatorText()).toBe('🧼');
+
+    document.dispatchEvent(new Event('yt-navigate-finish'));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(source.stop).not.toHaveBeenCalled();
+    expect(getIndicatorText()).toBe('🧼');
   });
 
   test('censored response signals player on fixture DOM', async () => {
