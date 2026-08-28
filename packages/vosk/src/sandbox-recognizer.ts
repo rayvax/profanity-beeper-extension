@@ -33,7 +33,7 @@ class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
   private activeRecognition: ActiveRecognition | undefined;
 
   constructor(private readonly options: VoskSandboxSpeechRecognizerOptions) {
-    this.fetchModel = options.fetch ?? globalThis.fetch;
+    this.fetchModel = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   preload(signal?: AbortSignal): Promise<void> {

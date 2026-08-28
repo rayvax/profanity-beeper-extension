@@ -104,6 +104,7 @@
     }
 
     if (msg.type === 'stop' && recognizer) {
+      recognizer.retrieveFinalResult();
       recognizer = null;
       return;
     }

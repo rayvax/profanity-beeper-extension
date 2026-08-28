@@ -139,4 +139,32 @@ describe('Vosk sandbox speech recognizer', () => {
 
     await expect(preload).rejects.toBe('bad model');
   });
+
+  test('binds the default browser fetch to its global scope', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchModel = mock(function (this: typeof globalThis) {
+      if (this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
+    });
+    globalThis.fetch = fetchModel as typeof globalThis.fetch;
+    try {
+      const recognizer = createVoskSandboxSpeechRecognizer({
+        modelUrl: 'chrome-extension://test/model.tar.gz',
+        sandboxUrl: 'about:blank',
+      });
+      const preload = recognizer.preload();
+      const iframe = document.querySelector('iframe')!;
+
+      emitSandboxMessage(iframe, { source: 'bleep-sandbox', type: 'ready' });
+      await flushMicrotasks();
+      emitSandboxMessage(iframe, { source: 'bleep-sandbox', type: 'model-ready' });
+
+      await expect(preload).resolves.toBeUndefined();
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
