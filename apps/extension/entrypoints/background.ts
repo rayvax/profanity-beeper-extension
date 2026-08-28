@@ -14,8 +14,8 @@ export default defineBackground(async () => {
     storage: chromeStorage,
     getLanguage: getUILanguage,
     fallbackConfig: BUNDLED_EN_MATCH_CONFIG,
-    // Local QA: fetch defaults from test/14.2 (not master) so skill/skills are live.
-    branch: 'test/14.2',
+    // Local QA: fetch defaults from test/censor-skill-word (not master) so skill/skills are live.
+    branch: 'test/censor-skill-word',
   });
 
   await resolver.refresh();
