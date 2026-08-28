@@ -47,6 +47,10 @@
         display: inline-block;
         margin-right: 5px;
       }
+      #ml-transcript .partial {
+        color: #666;
+        font-style: italic;
+      }
       #ml-transcript .censored {
         border-radius: 3px;
         padding: 0 3px;
@@ -90,7 +94,7 @@
     </form>
     <section id="ml-debug" hidden>
       <h2>Распознавание ML</h2>
-      <p class="legend">Красным — цензурируется</p>
+      <p class="legend">Серым — предварительно, красным — цензурируется</p>
       <div id="ml-transcript" aria-live="polite">
         <span data-empty>Ожидание распознавания…</span>
       </div>

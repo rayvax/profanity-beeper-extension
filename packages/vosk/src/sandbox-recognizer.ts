@@ -13,6 +13,9 @@ type SandboxMessage = {
   words?: unknown;
 };
 
+const PARTIAL_LOOKBACK_SECONDS = 0.6;
+const PARTIAL_LOOKAHEAD_SECONDS = 0.06;
+
 export type VoskSandboxSpeechRecognizerOptions = {
   modelUrl: string;
   sandboxUrl: string;
@@ -71,6 +74,7 @@ class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
       options: recognitionOptions,
       streamStartTime: recognitionOptions.media.currentTime,
       playbackRate: recognitionOptions.media.playbackRate,
+      partialTokens: [],
       stop: () => {},
     };
     this.activeRecognition = active;
@@ -86,6 +90,7 @@ class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
       if (recognitionOptions.media.paused) return;
       active.streamStartTime = recognitionOptions.media.currentTime;
       active.playbackRate = recognitionOptions.media.playbackRate;
+      active.partialTokens = [];
       this.sandbox?.post({ target: 'bleep-sandbox', type: 'start', sampleRate });
     };
     recognitionOptions.media.addEventListener('seeked', restartStream);
@@ -135,7 +140,15 @@ class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
       return;
     }
     if (!this.activeRecognition) return;
+    if (event.data.type === 'partial' && typeof event.data.text === 'string') {
+      const words = toPartialSpeechWords(event.data.text, this.activeRecognition);
+      if (words.length > 0) {
+        this.activeRecognition.options.onResult({ final: false, words });
+      }
+      return;
+    }
     if (event.data.type === 'result' && Array.isArray(event.data.words)) {
+      this.activeRecognition.partialTokens = [];
       const words = toSpeechWords(
         event.data.words,
         this.activeRecognition.streamStartTime,
@@ -150,6 +163,7 @@ type ActiveRecognition = {
   options: SpeechRecognitionOptions;
   streamStartTime: number;
   playbackRate: number;
+  partialTokens: string[];
   stop(): void;
 };
 
@@ -235,4 +249,24 @@ function toSpeechWords(
       },
     ];
   });
+}
+
+function toPartialSpeechWords(text: string, active: ActiveRecognition): SpeechWord[] {
+  const tokens = text.trim().split(/\s+/u).filter(Boolean);
+  let commonPrefixLength = 0;
+  while (
+    commonPrefixLength < tokens.length &&
+    tokens[commonPrefixLength] === active.partialTokens[commonPrefixLength]
+  ) {
+    commonPrefixLength += 1;
+  }
+  active.partialTokens = tokens;
+  const changedTokens = tokens.slice(commonPrefixLength);
+  if (changedTokens.length === 0) return [];
+
+  const playbackRate = active.options.media.playbackRate || 1;
+  const currentTime = active.options.media.currentTime;
+  const startTime = Math.max(0, currentTime - PARTIAL_LOOKBACK_SECONDS * playbackRate);
+  const endTime = currentTime + PARTIAL_LOOKAHEAD_SECONDS * playbackRate;
+  return changedTokens.map((token) => ({ text: token, startTime, endTime }));
 }

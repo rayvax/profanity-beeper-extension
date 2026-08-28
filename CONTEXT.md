@@ -14,7 +14,7 @@ _Avoid_: DOM-caption source, visual-caption reader
 
 **Cue censor range**:
 The entire timed caption cue selected for censorship when its source lacks per-word timing. It prevents a matched word from escaping at the cost of a longer beep.
-_Avoid_: Estimated word range
+_Avoid_: Estimated word range, partial cue beep
 
 **Transcript chunk**:
 An incremental span of transcript text with its start and end time in the media timeline. Sources emit only newly observed content, not the full visible caption line.
@@ -74,7 +74,11 @@ _Avoid_: Plain transcript, untimed captions
 
 **Final transcript**:
 A timed transcript whose recognised words and time ranges will not be revised by its source. ML mode emits it after an utterance boundary to confirm the recognizer's result and exact word timing.
-_Avoid_: Preliminary result
+_Avoid_: Provisional transcript
+
+**Provisional transcript**:
+An early ML recognition hypothesis emitted before the utterance ends. Its conservative media-timeline range enables censorship before delayed playback reaches the viewer; a later Final transcript remains authoritative and replaces the estimate.
+_Avoid_: Untimed partial text, final result
 
 **Censored playback**:
 ML-source playback whose audio and video are shifted by the same delay so a censoring action can be scheduled before a recognised word reaches the viewer. YouTube timedtext playback remains real-time.

@@ -4,7 +4,7 @@ import type { SpeechRecognitionOptions, SpeechRecognizer } from '@beeper/speech'
 import { SpeechTranscriptSource } from './speech-transcript-source';
 
 describe('SpeechTranscriptSource', () => {
-  test('forwards only final timed words to the TranscriptSource', async () => {
+  test('forwards provisional timed words for early ML censorship', async () => {
     let recognitionOptions: SpeechRecognitionOptions | undefined;
     const recognizer: SpeechRecognizer = {
       preload: mock(async () => {}),
@@ -22,17 +22,12 @@ describe('SpeechTranscriptSource', () => {
       final: false,
       words: [{ text: 'дурак', startTime: 4, endTime: 5 }],
     });
-    expect(onChunk).not.toHaveBeenCalled();
-
-    recognitionOptions?.onResult({
-      final: true,
-      words: [{ text: 'сука', startTime: 6, endTime: 7 }],
-    });
 
     expect(onChunk).toHaveBeenCalledWith({
-      text: 'сука',
-      startTime: 6,
-      endTime: 7,
+      text: 'дурак',
+      startTime: 4,
+      endTime: 5,
+      final: false,
     });
   });
 });

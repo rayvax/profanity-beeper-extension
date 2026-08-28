@@ -19,7 +19,9 @@ class FakeRecognizer {
 
   setWords(): void {}
 
-  acceptWaveformFloat(): void {}
+  acceptWaveformFloat(): void {
+    this.listeners.get('partialresult')?.({ result: { partial: 'сука' } });
+  }
 
   retrieveFinalResult(): void {
     this.listeners.get('result')?.({
@@ -28,7 +30,7 @@ class FakeRecognizer {
   }
 }
 
-test('sandbox flushes a final Vosk result when the audio stream stops', async () => {
+test('sandbox emits provisional text and flushes a final result on stop', async () => {
   const listeners = new Map<string, (event: { data: SandboxMessage }) => void | Promise<void>>();
   const posted: ParentMessage[] = [];
   const sandboxWindow = {
@@ -61,6 +63,11 @@ test('sandbox flushes a final Vosk result when the audio stream stops', async ()
   await send({ target: 'bleep-sandbox', type: 'audio', pcm: new Float32Array([0]).buffer });
   await send({ target: 'bleep-sandbox', type: 'stop' });
 
+  expect(posted).toContainEqual({
+    source: 'bleep-sandbox',
+    type: 'partial',
+    text: 'сука',
+  });
   expect(posted).toContainEqual({
     source: 'bleep-sandbox',
     type: 'result',

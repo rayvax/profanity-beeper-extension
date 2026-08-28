@@ -73,7 +73,7 @@ describe('popup UI', () => {
     runtimeListener(
       {
         type: 'ML_TRANSCRIPT_UPDATED',
-        entry: { text: 'дурак', censored: true },
+        entry: { text: 'дурак', censored: true, final: false },
       },
       { tab: { id: 7 } },
     );
@@ -81,5 +81,6 @@ describe('popup UI', () => {
     expect(document.querySelector<HTMLElement>('#ml-debug')?.hidden).toBeFalse();
     expect(document.querySelector('#ml-transcript')?.textContent).toContain('дурак');
     expect(document.querySelector('#ml-transcript .censored')).not.toBeNull();
+    expect(document.querySelector('#ml-transcript .partial')).not.toBeNull();
   });
 });

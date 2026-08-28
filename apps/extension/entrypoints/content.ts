@@ -17,6 +17,7 @@ export default defineContentScript({
               text: chunk.text,
               startTime: chunk.startTime,
               endTime: chunk.endTime,
+              final: chunk.final ?? true,
               censored,
             },
           })

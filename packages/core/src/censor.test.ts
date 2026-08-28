@@ -41,6 +41,21 @@ describe('Censor ranges', () => {
     ).toEqual([{ startTime: 12.5, endTime: 14 }]);
   });
 
+  test('marks an ML provisional range so final timing can replace it', () => {
+    const lexicon = createCensorLexicon({ literalWords: ['сука'] });
+
+    expect(
+      createCensorRanges({ text: 'Сука!', startTime: 9.4, endTime: 10.06, final: false }, lexicon),
+    ).toEqual([
+      {
+        startTime: 9.4,
+        endTime: 10.06,
+        final: false,
+        token: 'сука',
+      },
+    ]);
+  });
+
   test('does not create a range without a media timeline interval', () => {
     const lexicon = createCensorLexicon({ literalWords: ['дурак'] });
 

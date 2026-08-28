@@ -2,6 +2,8 @@ export type TranscriptChunk = {
   text: string;
   startTime?: number;
   endTime?: number;
+  /** False only while ML recognition is still a provisional hypothesis. */
+  final?: boolean;
 };
 
 export type TranscriptSession = {
