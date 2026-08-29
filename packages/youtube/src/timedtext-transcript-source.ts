@@ -7,7 +7,7 @@ import {
   getInnerTubeApiKey,
 } from './fetch-caption-tracks';
 import type { TimedTextCue } from './timed-text-cue';
-import { getVideoIdFromUrl } from './is-watch-page';
+import { getVideoIdFromUrl } from './get-video-id-from-url';
 import { getCaptionTracksFromPlayerResponse } from './page-bridge';
 import { PlayerSelector } from './selectors';
 import { selectCaptionTrack } from './select-caption-track';

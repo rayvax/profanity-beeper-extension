@@ -14,7 +14,7 @@ export default defineBackground(async () => {
 
   const resolver = new MatchConfigResolver({
     fetch,
-    storage: chromeStorage,
+    storagePort: chromeStorage,
     language: getUILanguage(),
     fallbackConfig: BUNDLED_EN_MATCH_CONFIG,
   });

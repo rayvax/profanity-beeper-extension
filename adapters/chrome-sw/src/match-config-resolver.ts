@@ -16,7 +16,8 @@ export type MatchConfigStore = {
 
 export type MatchConfigResolverDeps = {
   fetch: (url: string) => Promise<Response>;
-  storage: StoragePort;
+  // Named storagePort: WXT auto-imports `storage` from wxt/utils/storage into bundled files.
+  storagePort: StoragePort;
   language: string;
   owner?: string;
   repo?: string;
@@ -33,7 +34,7 @@ const STORAGE_CONFIG_KEY = 'matchConfig';
 
 export class MatchConfigResolver {
   private readonly fetch: (url: string) => Promise<Response>;
-  private readonly storage: StoragePort;
+  private readonly storagePort: StoragePort;
   private readonly language: string;
   private readonly owner: string;
   private readonly repo: string;
@@ -42,7 +43,7 @@ export class MatchConfigResolver {
 
   constructor(deps: MatchConfigResolverDeps) {
     this.fetch = deps.fetch;
-    this.storage = deps.storage;
+    this.storagePort = deps.storagePort;
     this.language = deps.language;
     this.owner = deps.owner ?? DEFAULT_OWNER;
     this.repo = deps.repo ?? DEFAULT_REPO;
@@ -51,7 +52,7 @@ export class MatchConfigResolver {
   }
 
   async refresh(): Promise<void> {
-    const stored = (await this.storage.get([STORAGE_META_KEY, STORAGE_CONFIG_KEY])) as {
+    const stored = (await this.storagePort.get([STORAGE_META_KEY, STORAGE_CONFIG_KEY])) as {
       matchConfigMeta?: MatchConfigMeta;
       matchConfig?: MatchConfigStore;
     };
@@ -86,7 +87,7 @@ export class MatchConfigResolver {
     }
 
     const previous = stored.matchConfig ?? { remote: {}, user: {} };
-    await this.storage.set({
+    await this.storagePort.set({
       [STORAGE_META_KEY]: { configSha: remoteSha },
       [STORAGE_CONFIG_KEY]: {
         remote: { ...previous.remote, [lang]: config },
@@ -96,7 +97,7 @@ export class MatchConfigResolver {
   }
 
   async getConfig(): Promise<MatchConfig> {
-    const stored = (await this.storage.get([STORAGE_CONFIG_KEY])) as {
+    const stored = (await this.storagePort.get([STORAGE_CONFIG_KEY])) as {
       matchConfig?: MatchConfigStore;
     };
 

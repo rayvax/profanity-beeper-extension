@@ -30,7 +30,7 @@ describe('LiveChunkMatcher', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: 'en',
     });
 

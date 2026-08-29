@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { getVideoIdFromUrl, isWatchPage } from './is-watch-page';
+import { isWatchPage } from './is-watch-page';
 
 function setLocation(url: string): void {
   window.location.href = url;
@@ -27,21 +27,5 @@ describe('isWatchPage', () => {
 
     setLocation('https://www.youtube.com/feed/subscriptions');
     expect(isWatchPage()).toBe(false);
-  });
-});
-
-describe('getVideoIdFromUrl', () => {
-  afterEach(() => {
-    setLocation('https://www.youtube.com/watch?v=test123');
-  });
-
-  test('returns the v query param', () => {
-    setLocation('https://www.youtube.com/watch?v=abc123');
-    expect(getVideoIdFromUrl()).toBe('abc123');
-  });
-
-  test('returns null when v is missing', () => {
-    setLocation('https://www.youtube.com/watch');
-    expect(getVideoIdFromUrl()).toBeNull();
   });
 });

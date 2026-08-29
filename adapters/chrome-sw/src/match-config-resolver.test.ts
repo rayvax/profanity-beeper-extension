@@ -38,7 +38,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
-      storage,
+      storagePort: storage,
       language: 'en',
     });
 
@@ -70,7 +70,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
-      storage,
+      storagePort: storage,
       language: 'en',
     });
 
@@ -106,7 +106,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: fetchFn,
-      storage,
+      storagePort: storage,
       language: 'en',
     });
 
@@ -128,7 +128,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: 'en',
     });
 
@@ -144,7 +144,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: 'ru-RU',
     });
 
@@ -164,7 +164,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: 'ru-RU',
     });
 
@@ -180,7 +180,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: '',
     });
 
@@ -200,7 +200,7 @@ describe('MatchConfigResolver', () => {
 
     const resolver = new MatchConfigResolver({
       fetch: async () => jsonResponse([{ sha: 'sha-same' }]),
-      storage,
+      storagePort: storage,
       language: 'en-US',
     });
 
