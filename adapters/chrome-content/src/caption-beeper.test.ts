@@ -7,6 +7,8 @@ import {
   type TranscriptSourceOptions,
 } from '@beeper/core';
 
+import { YoutubeEvent } from '@beeper/youtube';
+
 import { startCaptionBeeper } from './caption-beeper';
 
 const INDICATOR_SELECTOR = '[data-beeper-indicator]';
@@ -45,6 +47,7 @@ function getIndicatorText(): string | undefined {
 describe('startCaptionBeeper', () => {
   beforeEach(() => {
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
+    window.history.pushState({}, '', '/watch?v=test123');
   });
 
   test('binds injected transcript source on watch page', async () => {
@@ -60,7 +63,7 @@ describe('startCaptionBeeper', () => {
     expect(getIndicatorText()).toBe('🧼');
   });
 
-  test('transcript chunk sends WORD_CAPTURED through messaging', async () => {
+  test('transcript chunk sends CHUNK_CAPTURED through messaging', async () => {
     const send = mock(async () => ({ ok: true as const, censored: false }));
     const source = new FakeTranscriptSource();
 
@@ -71,8 +74,8 @@ describe('startCaptionBeeper', () => {
     await flushMicrotasks();
 
     expect(send).toHaveBeenCalledWith({
-      type: MessageType.WORD_CAPTURED,
-      word: 'hello',
+      type: MessageType.CHUNK_CAPTURED,
+      text: 'hello',
     });
   });
 
@@ -99,10 +102,29 @@ describe('startCaptionBeeper', () => {
     );
     await flushMicrotasks();
 
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    // Different video id: same-page yt-navigate-finish must rebind.
+    window.history.pushState({}, '', '/watch?v=other456');
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).toHaveBeenCalled();
+  });
+
+  test('same-video yt-navigate-finish does not rebind', async () => {
+    const source = new FakeTranscriptSource();
+    startCaptionBeeper(
+      stubMessaging(async () => ({ ok: true, censored: false })),
+      source,
+    );
+    await flushMicrotasks();
+
+    expect(getIndicatorText()).toBe('🧼');
+
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(source.stop).not.toHaveBeenCalled();
+    expect(getIndicatorText()).toBe('🧼');
   });
 
   test('censored response signals player on fixture DOM', async () => {

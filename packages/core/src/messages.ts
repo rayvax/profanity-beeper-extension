@@ -1,15 +1,15 @@
 export const MessageType = {
-  WORD_CAPTURED: 'WORD_CAPTURED',
-  WORD_CENSORED: 'WORD_CENSORED',
+  CHUNK_CAPTURED: 'CHUNK_CAPTURED',
+  CHUNK_CENSORED: 'CHUNK_CENSORED',
 } as const;
 
 export type MessageMap = {
-  [MessageType.WORD_CAPTURED]: {
-    request: { word: string };
+  [MessageType.CHUNK_CAPTURED]: {
+    request: { text: string };
     response: { ok: true; censored: boolean } | { ok: false; error: string };
   };
-  [MessageType.WORD_CENSORED]: {
-    request: Record<string, never>;
+  [MessageType.CHUNK_CENSORED]: {
+    request: { text: string };
     response: void;
   };
 };
@@ -28,8 +28,8 @@ export type ExtensionMessage = {
   [K in MessageTypeValue]: RequestOf<K>;
 }[MessageTypeValue];
 
-export type WordCapturedMessage = RequestOf<typeof MessageType.WORD_CAPTURED>;
-export type WordCensoredMessage = RequestOf<typeof MessageType.WORD_CENSORED>;
+export type ChunkCapturedMessage = RequestOf<typeof MessageType.CHUNK_CAPTURED>;
+export type ChunkCensoredMessage = RequestOf<typeof MessageType.CHUNK_CENSORED>;
 
 export function isMessageOfType<T extends MessageTypeValue>(
   message: unknown,

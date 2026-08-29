@@ -5,12 +5,13 @@ export type {
   RequestOf,
   ResponseOf,
   ExtensionMessage,
-  WordCapturedMessage,
-  WordCensoredMessage,
+  ChunkCapturedMessage,
+  ChunkCensoredMessage,
 } from './messages';
 export { Messaging } from './messaging';
 export type { MessageTransport, ReplyCallback, MessageHandler } from './messaging';
-export { triggerWords, isTriggerWord } from './trigger-words';
+export type { MatchConfig } from './match-config';
+export { ChunkMatcher } from './chunk-matcher';
 export { PlayerIndicator } from './player-indicator';
 export type { PlayerIndicatorState } from './player-indicator';
 export type {

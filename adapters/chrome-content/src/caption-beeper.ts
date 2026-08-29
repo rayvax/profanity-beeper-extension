@@ -5,7 +5,14 @@ import {
   type TranscriptSession,
   type TranscriptSource,
 } from '@beeper/core';
-import { findElement, isWatchPage, PlayerSelector, signalPlayer } from '@beeper/youtube';
+import {
+  findElement,
+  getVideoIdFromUrl,
+  isWatchPage,
+  PlayerSelector,
+  signalPlayer,
+  YoutubeEvent,
+} from '@beeper/youtube';
 
 const LOG_PREFIX = '[Caption Beeper]';
 const REBIND_DEBOUNCE_MS = 150;
@@ -18,6 +25,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
   let indicator: PlayerIndicator | null = null;
   let abortController: AbortController | null = null;
   let rebindTimer: ReturnType<typeof setTimeout> | undefined;
+  let boundVideoId: string | null = null;
 
   function unbind() {
     session?.stop();
@@ -26,6 +34,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
     indicator = null;
     abortController?.abort();
     abortController = null;
+    boundVideoId = null;
   }
 
   async function bind() {
@@ -35,6 +44,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
       return;
     }
 
+    const videoId = getVideoIdFromUrl();
     abortController = new AbortController();
     const { signal } = abortController;
 
@@ -57,8 +67,8 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
         onChunk: (chunk) => {
           void (async () => {
             const response = await messaging.send({
-              type: MessageType.WORD_CAPTURED,
-              word: chunk.text,
+              type: MessageType.CHUNK_CAPTURED,
+              text: chunk.text,
             });
 
             if (response.ok && response.censored) {
@@ -67,7 +77,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
           })();
         },
         signal,
-        onDetach: scheduleRebind,
+        onDetach: () => scheduleRebind('onDetach'),
       });
 
       if (signal.aborted) {
@@ -76,6 +86,7 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
       }
 
       indicator.setState('working');
+      boundVideoId = videoId;
     } catch (error) {
       if (signal.aborted) {
         return;
@@ -87,13 +98,22 @@ export function startCaptionBeeper(messaging: Messaging, source: TranscriptSourc
     }
   }
 
-  function scheduleRebind() {
+  function scheduleRebind(reason: string) {
+    const videoId = getVideoIdFromUrl();
+    // Same watch page: YouTube often fires yt-navigate-finish after initial bind.
+    // Skip full teardown/rebind so the indicator does not flash loading again.
+    if (reason === YoutubeEvent.NAVIGATE_FINISH && videoId && videoId === boundVideoId) {
+      return;
+    }
+
     clearTimeout(rebindTimer);
     rebindTimer = setTimeout(() => {
       void bind();
     }, REBIND_DEBOUNCE_MS);
   }
 
-  document.addEventListener('yt-navigate-finish', scheduleRebind);
+  document.addEventListener(YoutubeEvent.NAVIGATE_FINISH, () =>
+    scheduleRebind(YoutubeEvent.NAVIGATE_FINISH),
+  );
   void bind();
 }
