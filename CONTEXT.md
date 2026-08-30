@@ -1,4 +1,4 @@
-# Youtube Beeper
+# SoapTheMouth
 
 Chrome extension that detects profanity in YouTube captions and signals the player (mute + flash).
 

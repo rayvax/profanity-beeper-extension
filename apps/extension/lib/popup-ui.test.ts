@@ -6,19 +6,30 @@ const originalChrome = globalThis.chrome;
 
 function popupMarkup(): string {
   return `
+    <header class="app-header">
+      <h1>SoapTheMouth</h1>
+      <p id="status" role="status"></p>
+    </header>
     <form id="settings">
-      <select name="source">
-        <option value="captions">captions</option>
-        <option value="ml">ML</option>
-      </select>
-      <select name="effect"><option value="beep">beep</option></select>
-      <input name="delaySeconds" value="1.2" />
-      <textarea name="literalAdditions"></textarea>
-      <textarea name="patterns"></textarea>
-      <textarea name="whitelist"></textarea>
-      <output id="delay"></output>
-      <p id="status"></p>
-      <p id="error"></p>
+      <label class="field">
+        <span class="field-label">Источник</span>
+        <select name="source">
+          <option value="captions">captions</option>
+          <option value="ml">ML</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Эффект</span>
+        <select name="effect"><option value="beep">beep</option></select>
+      </label>
+      <label class="field">
+        <span class="field-label">Задержка <output id="delay"></output></span>
+        <input name="delaySeconds" type="range" value="1.2" />
+      </label>
+      <label class="field"><textarea name="literalAdditions"></textarea></label>
+      <label class="field"><textarea name="patterns"></textarea></label>
+      <label class="field"><textarea name="whitelist"></textarea></label>
+      <p id="error" role="alert"></p>
     </form>
     <section id="ml-debug" hidden>
       <div id="ml-transcript"></div>
@@ -70,6 +81,7 @@ describe('popup UI', () => {
     await flushMessages();
 
     expect(document.querySelector('#error')?.textContent).toBe('Invalid RegExp: [');
+    expect(document.querySelector('#delay')?.textContent).toMatch(/^\d\.\d с$/);
     runtimeListener(
       {
         type: 'ML_TRANSCRIPT_UPDATED',

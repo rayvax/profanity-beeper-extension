@@ -2,45 +2,302 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <title>Youtube Beeper</title>
+    <title>SoapTheMouth</title>
     <style>
+      :root {
+        --red: #ee2b2e;
+        --ink: #141414;
+        --muted: #6b6b6b;
+        --line: #e7e7e7;
+        --soft: #f7f6f3;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scrollbar-width: thin;
+        scrollbar-color: #dcdcdc transparent;
+      }
       body {
-        font-family: system-ui, sans-serif;
+        font-family: system-ui, 'Segoe UI', sans-serif;
         margin: 0;
-        padding: 12px 14px;
+        padding: 0 14px 14px;
         min-width: 340px;
+        max-height: 580px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         font-size: 13px;
+        line-height: 1.45;
+        color: var(--ink);
+        background: #fff;
       }
-      p {
-        margin: 0 0 10px;
+      ::-webkit-scrollbar {
+        width: 8px;
       }
-      label {
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #dcdcdc;
+        border: 2px solid #fff;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--red);
+      }
+      .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
         display: flex;
         align-items: center;
         gap: 8px;
+        margin: 0 -14px 10px;
+        padding: 12px 14px 10px;
+        border-top: 3px solid var(--red);
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+      .bubbles {
+        position: relative;
+        width: 24px;
+        height: 18px;
+        margin-left: -2px;
+      }
+      .bubbles i {
+        position: absolute;
+        border: 1.5px solid rgba(238, 43, 46, 0.45);
+        border-radius: 50%;
+        animation: bubble-float 3s ease-in-out infinite;
+      }
+      .bubbles i:nth-child(1) {
+        left: 0;
+        bottom: 2px;
+        width: 6px;
+        height: 6px;
+      }
+      .bubbles i:nth-child(2) {
+        left: 8px;
+        top: 0;
+        width: 9px;
+        height: 9px;
+        animation-delay: 0.4s;
+      }
+      .bubbles i:nth-child(3) {
+        right: 0;
+        bottom: 0;
+        width: 5px;
+        height: 5px;
+        animation-delay: 0.8s;
+      }
+      @keyframes bubble-float {
+        50% {
+          transform: translateY(-3px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bubbles i {
+          animation: none;
+        }
+      }
+      .app-header img {
+        display: block;
+        width: 28px;
+        height: 28px;
+      }
+      .app-header h1 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      #status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin: 0 0 0 auto;
+        padding: 2px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      #status::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--red);
+      }
+      #status:empty {
+        display: none;
+      }
+      #settings {
+        display: grid;
+        gap: 10px;
+      }
+      .field {
+        display: grid;
+        gap: 4px;
         cursor: pointer;
       }
-      .hint {
-        margin-top: 10px;
+      .field-label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
         font-size: 11px;
-        color: #555;
-        line-height: 1.4;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        transition: color 150ms;
+      }
+      .field:hover .field-label {
+        color: var(--ink);
+      }
+      .field:focus-within .field-label {
+        color: var(--red);
+      }
+      select,
+      textarea {
+        width: 100%;
+        font: inherit;
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 8px;
+        transition:
+          border-color 150ms,
+          box-shadow 150ms;
+      }
+      select {
+        appearance: none;
+        padding-right: 26px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 9px center;
+      }
+      textarea {
+        resize: vertical;
+        min-height: 54px;
+      }
+      textarea[name='patterns'] {
+        font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+        font-size: 12px;
+      }
+      select:hover,
+      textarea:hover {
+        border-color: #c9c9c9;
+      }
+      select:focus-visible,
+      textarea:focus-visible {
+        outline: none;
+        border-color: var(--red);
+        box-shadow: 0 0 0 2px rgba(238, 43, 46, 0.25);
+      }
+      input[type='range']:focus-visible {
+        outline: 2px solid var(--red);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      input[type='range'] {
+        width: 100%;
+        margin: 6px 0 2px;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+      }
+      input[type='range']::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--line);
+      }
+      input[type='range']::-webkit-slider-thumb {
+        appearance: none;
+        width: 18px;
+        height: 12px;
+        margin-top: -4px;
+        border: none;
+        border-radius: 6px;
+        background: var(--red);
+        box-shadow: inset 0 -3px 0 rgba(20, 20, 20, 0.18);
+        transition: transform 150ms;
+      }
+      input[type='range']::-moz-range-track {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--line);
+      }
+      input[type='range']::-moz-range-thumb {
+        width: 18px;
+        height: 12px;
+        border: none;
+        border-radius: 6px;
+        background: var(--red);
+        box-shadow: inset 0 -3px 0 rgba(20, 20, 20, 0.18);
+        transition: transform 150ms;
+      }
+      input[type='range']:hover::-webkit-slider-thumb {
+        transform: scale(1.12);
+      }
+      input[type='range']:active::-webkit-slider-thumb {
+        transform: scale(0.95);
+      }
+      input[type='range']:hover::-moz-range-thumb {
+        transform: scale(1.12);
+      }
+      input[type='range']:active::-moz-range-thumb {
+        transform: scale(0.95);
+      }
+      #delay {
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: #fdebec;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--red);
+        font-variant-numeric: tabular-nums;
+      }
+      #error {
+        margin: 0;
+        padding: 6px 8px;
+        border-left: 2px solid var(--red);
+        border-radius: 4px;
+        background: #fdebec;
+        color: #9f2f2d;
+        font-size: 12px;
+      }
+      #error:empty {
+        display: none;
       }
       #ml-debug {
         margin-top: 12px;
-        border-top: 1px solid #ddd;
+        border-top: 1px solid var(--line);
         padding-top: 10px;
       }
       #ml-debug h2 {
+        margin: 0 0 4px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      #ml-debug .legend {
         margin: 0 0 6px;
-        font-size: 12px;
+        color: var(--muted);
+        font-size: 11px;
       }
       #ml-transcript {
         max-height: 150px;
         overflow-y: auto;
         padding: 8px;
+        border: 1px solid var(--line);
         border-radius: 6px;
-        background: #f3f3f3;
+        background: var(--soft);
         line-height: 1.7;
       }
       #ml-transcript span {
@@ -48,48 +305,56 @@
         margin-right: 5px;
       }
       #ml-transcript .partial {
-        color: #666;
+        color: var(--muted);
         font-style: italic;
       }
       #ml-transcript .censored {
         border-radius: 3px;
         padding: 0 3px;
-        background: #b3261e;
+        background: var(--red);
         color: #fff;
         font-weight: 700;
-      }
-      #ml-debug .legend {
-        margin: 0 0 6px;
-        color: #666;
-        font-size: 11px;
       }
     </style>
   </head>
   <body>
+    <header class="app-header">
+      <img src="../assets/icon.svg" alt="" width="28" height="28" />
+      <h1>SoapTheMouth</h1>
+      <span class="bubbles" aria-hidden="true"><i></i><i></i><i></i></span>
+      <p id="status" role="status"></p>
+    </header>
     <form id="settings">
-      <label
-        >Источник
+      <label class="field">
+        <span class="field-label">Источник</span>
         <select name="source">
           <option value="captions">Субтитры</option>
           <option value="ml">ML</option>
-        </select></label
-      >
-      <label
-        >Эффект
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Эффект</span>
         <select name="effect">
           <option value="beep">Сигнал</option>
           <option value="silence">Тишина</option>
-        </select></label
-      >
-      <label
-        >Задержка <input name="delaySeconds" type="range" min="0.6" max="3" step="0.1" /><output
-          id="delay"
-        ></output
-      ></label>
-      <label>Дополнительные слова <textarea name="literalAdditions" rows="3"></textarea></label>
-      <label>RegExp (по одному на строку) <textarea name="patterns" rows="3"></textarea></label>
-      <label>Whitelist <textarea name="whitelist" rows="3"></textarea></label>
-      <p id="status"></p>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Задержка <output id="delay"></output></span>
+        <input name="delaySeconds" type="range" min="0.6" max="3" step="0.1" />
+      </label>
+      <label class="field">
+        <span class="field-label">Дополнительные слова</span>
+        <textarea name="literalAdditions" rows="3"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-label">RegExp (по одному на строку)</span>
+        <textarea name="patterns" rows="3"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-label">Whitelist</span>
+        <textarea name="whitelist" rows="3"></textarea>
+      </label>
       <p id="error" role="alert"></p>
     </form>
     <section id="ml-debug" hidden>

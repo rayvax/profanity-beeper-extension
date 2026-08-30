@@ -2,12 +2,18 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   outDir: 'dist',
+  modules: ['@wxt-dev/auto-icons'],
+  autoIcons: {
+    baseIconPath: 'assets/icon.svg',
+    developmentIndicator: false,
+    sizes: [16, 32, 48, 96, 128],
+  },
   manifest: {
-    name: 'Youtube Beeper',
+    name: 'SoapTheMouth',
     version: '0.0.1',
     permissions: ['offscreen', 'storage', 'tabs'],
     action: {
-      default_title: 'Youtube Beeper',
+      default_title: 'SoapTheMouth',
     },
     sandbox: {
       pages: ['sandbox.html'],

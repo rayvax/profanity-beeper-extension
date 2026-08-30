@@ -16,6 +16,7 @@
     "@beeper/adapter-vosk-content": "workspace:*"
   },
   "devDependencies": {
+    "@wxt-dev/auto-icons": "^1.1.2",
     "@types/chrome": "^0.0.287",
     "@types/gapi": "^0.0.47",
     "@types/gapi.youtube": "^3.0.40",

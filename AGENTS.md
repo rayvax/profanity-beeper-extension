@@ -4,7 +4,7 @@
 
 ## Repository purpose
 
-Bun monorepo for **Youtube Beeper** — a Manifest V3 Chrome extension that detects profanity in YouTube captions and signals the player (mute + flash). Offscreen audio beep support is wired but currently stubbed in the service worker (same as the source example).
+Bun monorepo for **SoapTheMouth** — a Manifest V3 Chrome extension that detects profanity in YouTube captions and signals the player (mute + flash). Offscreen audio beep support is wired but currently stubbed in the service worker (same as the source example).
 
 ## Structure
 
