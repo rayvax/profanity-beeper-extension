@@ -1,30 +1,34 @@
 import {
+  CensorStatus,
   createCensorRanges,
-  MessageType,
   type CensorExecutor,
-  type CensorLexicon,
   type CensorSettings,
-  type Messaging,
+  type CensorStatusValue,
+  type ChunkMatcher,
   type TranscriptChunk,
   type TranscriptSession,
   type TranscriptSource,
 } from '@beeper/core';
-import { findElement, isWatchPage, PlayerSelector, signalPlayer } from '@beeper/youtube';
+import {
+  findElement,
+  getVideoIdFromUrl,
+  isWatchPage,
+  PlayerSelector,
+  YoutubeEvent,
+} from '@beeper/youtube';
 
 const LOG_PREFIX = '[Caption Beeper]';
 const REBIND_DEBOUNCE_MS = 150;
 const PLAYER_WAIT_MS = 5_000;
 
-export type CensorSessionStatus = 'loading' | 'working' | 'error';
-
 export type TimedCensorSessionOptions = {
   source: TranscriptSource;
-  lexicon: CensorLexicon;
+  matcher: ChunkMatcher;
   executor: CensorExecutor;
   armOnInteraction?: boolean;
   updateSettings?(settings: CensorSettings): void;
   onTranscript?(entry: { chunk: TranscriptChunk; censored: boolean }): void;
-  onStatus?: (status: CensorSessionStatus) => void;
+  onStatus?: (status: CensorStatusValue) => void;
 };
 
 export type TranscriptBeeperSession = {
@@ -32,66 +36,45 @@ export type TranscriptBeeperSession = {
   stop(): void;
 };
 
-export function startCaptionBeeper(
-  messaging: Messaging,
-  source: TranscriptSource,
-): TranscriptBeeperSession;
-export function startCaptionBeeper(
-  messaging: Messaging,
-  options: TimedCensorSessionOptions,
-): TranscriptBeeperSession;
-export function startCaptionBeeper(
-  messaging: Messaging,
-  sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
-): TranscriptBeeperSession {
-  return new CaptionBeeperSession(messaging, sourceOrOptions);
+export function startCaptionBeeper(options: TimedCensorSessionOptions): TranscriptBeeperSession {
+  return new CaptionBeeperSession(options);
 }
 
 class CaptionBeeperSession implements TranscriptBeeperSession {
-  private readonly options: TimedCensorSessionOptions | undefined;
-  private readonly source: TranscriptSource;
   private session: TranscriptSession | null = null;
   private abortController: AbortController | null = null;
   private rebindTimer: ReturnType<typeof setTimeout> | undefined;
   private interactionHandler: (() => void) | undefined;
   private disposeExecutorError: (() => void) | undefined;
+  private boundVideoId: string | null = null;
 
-  constructor(
-    private readonly messaging: Messaging,
-    sourceOrOptions: TranscriptSource | TimedCensorSessionOptions,
-  ) {
+  constructor(private readonly options: TimedCensorSessionOptions) {
     console.info(`${LOG_PREFIX} injected at`, location.href);
-    if (isTimedCensorSessionOptions(sourceOrOptions)) {
-      this.options = sourceOrOptions;
-      this.source = sourceOrOptions.source;
-    } else {
-      this.options = undefined;
-      this.source = sourceOrOptions;
-    }
-    document.addEventListener('yt-navigate-finish', this.scheduleRebind);
+    document.addEventListener(YoutubeEvent.NAVIGATE_FINISH, this.onNavigateFinish);
     void this.bind();
   }
 
   updateSettings(settings: CensorSettings): void {
-    this.options?.updateSettings?.(settings);
+    this.options.updateSettings?.(settings);
   }
 
   stop(): void {
     clearTimeout(this.rebindTimer);
-    document.removeEventListener('yt-navigate-finish', this.scheduleRebind);
+    document.removeEventListener(YoutubeEvent.NAVIGATE_FINISH, this.onNavigateFinish);
     this.unbind();
   }
 
-  private setStatus(status: CensorSessionStatus): void {
-    this.options?.onStatus?.(status);
+  private setStatus(status: CensorStatusValue): void {
+    this.options.onStatus?.(status);
   }
 
   private unbind(): void {
     this.session?.stop();
     this.session = null;
-    this.options?.executor.stop?.();
+    this.options.executor.stop?.();
     this.abortController?.abort();
     this.abortController = null;
+    this.boundVideoId = null;
     if (this.interactionHandler) {
       document.removeEventListener('pointerdown', this.interactionHandler, true);
       document.removeEventListener('keydown', this.interactionHandler, true);
@@ -108,6 +91,7 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
       return;
     }
 
+    const videoId = getVideoIdFromUrl();
     const controller = new AbortController();
     this.abortController = controller;
     const { signal } = controller;
@@ -124,17 +108,17 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
       return;
     }
 
-    this.setStatus('loading');
+    this.setStatus(CensorStatus.WAITING);
 
     try {
-      const boundSession = await this.source.bind({
+      const boundSession = await this.options.source.bind({
         onChunk: (chunk) => {
           if (!signal.aborted && this.abortController === controller) {
             void this.handleChunk(chunk, controller);
           }
         },
         signal,
-        onDetach: this.scheduleRebind,
+        onDetach: () => this.scheduleRebind('onDetach'),
         onError: (error) => this.failSession(error, controller),
       });
 
@@ -144,10 +128,10 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
       }
 
       this.session = boundSession;
-      const armableExecutor = this.options?.armOnInteraction
+      const armableExecutor = this.options.armOnInteraction
         ? getArmableExecutor(this.options.executor)
         : undefined;
-      const failureAwareExecutor = getFailureAwareExecutor(this.options?.executor);
+      const failureAwareExecutor = getFailureAwareExecutor(this.options.executor);
       if (failureAwareExecutor) {
         this.disposeExecutorError = failureAwareExecutor.onError((error) =>
           this.failSession(error, controller),
@@ -161,7 +145,7 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
             this.interactionHandler = undefined;
           }
           void Promise.resolve(armableExecutor.arm()).then(
-            () => this.setStatus('working'),
+            () => this.setStatus(CensorStatus.WORKING),
             (error: unknown) => this.failSession(error, controller),
           );
         };
@@ -173,8 +157,9 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
           document.addEventListener('keydown', this.interactionHandler, true);
         }
       } else {
-        this.setStatus('working');
+        this.setStatus(CensorStatus.WORKING);
       }
+      this.boundVideoId = videoId;
     } catch (error) {
       if (signal.aborted || this.abortController !== controller) {
         return;
@@ -186,56 +171,49 @@ class CaptionBeeperSession implements TranscriptBeeperSession {
 
       console.error(`${LOG_PREFIX} bind failed`, error);
       this.session = null;
-      this.setStatus('error');
+      this.setStatus(CensorStatus.ERROR);
     }
   }
 
   private async handleChunk(chunk: TranscriptChunk, controller: AbortController): Promise<void> {
-    if (this.options) {
-      try {
-        const ranges = createCensorRanges(chunk, this.options.lexicon);
-        this.options.onTranscript?.({ chunk, censored: ranges.length > 0 });
-        await Promise.all(ranges.map((range) => this.options?.executor.execute(range)));
-      } catch (error) {
-        if (controller.signal.aborted || this.abortController !== controller) {
-          return;
-        }
-
-        console.error(`${LOG_PREFIX} censor failed`, error);
-        this.options.executor.stop?.();
-        this.setStatus('error');
+    try {
+      const ranges = createCensorRanges(chunk, this.options.matcher);
+      this.options.onTranscript?.({ chunk, censored: ranges.length > 0 });
+      await Promise.all(ranges.map((range) => this.options.executor.execute(range)));
+    } catch (error) {
+      if (controller.signal.aborted || this.abortController !== controller) {
+        return;
       }
 
-      return;
-    }
-
-    const response = await this.messaging.send({
-      type: MessageType.WORD_CAPTURED,
-      word: chunk.text,
-    });
-
-    if (
-      !controller.signal.aborted &&
-      this.abortController === controller &&
-      response.ok &&
-      response.censored
-    ) {
-      signalPlayer();
+      console.error(`${LOG_PREFIX} censor failed`, error);
+      this.options.executor.stop?.();
+      this.setStatus(CensorStatus.ERROR);
     }
   }
 
   private failSession(error: unknown, controller: AbortController): void {
     if (controller.signal.aborted || this.abortController !== controller) return;
     console.error(`${LOG_PREFIX} censor failed`, error);
-    this.options?.executor.stop?.();
-    this.setStatus('error');
+    this.options.executor.stop?.();
+    this.setStatus(CensorStatus.ERROR);
   }
 
-  private readonly scheduleRebind = (): void => {
+  private scheduleRebind(reason: string): void {
+    const videoId = getVideoIdFromUrl();
+    // Same watch page: YouTube often fires yt-navigate-finish after initial bind.
+    // Skip full teardown/rebind so the session status does not flash again.
+    if (reason === YoutubeEvent.NAVIGATE_FINISH && videoId && videoId === this.boundVideoId) {
+      return;
+    }
+
     clearTimeout(this.rebindTimer);
     this.rebindTimer = setTimeout(() => {
       void this.bind();
     }, REBIND_DEBOUNCE_MS);
+  }
+
+  private readonly onNavigateFinish = (): void => {
+    this.scheduleRebind(YoutubeEvent.NAVIGATE_FINISH);
   };
 }
 
@@ -254,10 +232,4 @@ function getFailureAwareExecutor(
   return executor as CensorExecutor & {
     onError(listener: (error: unknown) => void): () => void;
   };
-}
-
-function isTimedCensorSessionOptions(
-  value: TranscriptSource | TimedCensorSessionOptions,
-): value is TimedCensorSessionOptions {
-  return !('bind' in value);
 }

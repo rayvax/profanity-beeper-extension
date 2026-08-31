@@ -73,6 +73,12 @@ export class YoutubeTimedtextSource implements TranscriptSource {
     let nextIndex = 0;
     let lastMediaTime = media.currentTime;
     const emitDueChunks = () => {
+      // A media element pulled from the DOM means SPA teardown; rebind.
+      if (media.isConnected === false) {
+        stop();
+        options.onDetach?.();
+        return;
+      }
       const now = media.currentTime;
       if (now < lastMediaTime - SEEK_BACK_TOLERANCE_SECONDS) {
         nextIndex = chunks.findIndex((chunk) => (chunk.endTime ?? 0) > now);

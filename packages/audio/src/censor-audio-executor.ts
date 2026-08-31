@@ -1,21 +1,10 @@
 import { CensorAudioEffect, type CensorAudioEffectValue } from './censor-effect';
-import {
-  createCensorWindowScheduler,
-  type CensorAudioWindow,
-  type CensorWindowScheduler,
-} from './censor-window-scheduler';
+import { CensorWindowScheduler, type CensorAudioWindow } from './censor-window-scheduler';
 import { acquireMediaGraph } from './media-graph';
 
 export type MediaTimelineRange = {
   startTime: number;
   endTime: number;
-};
-
-export type CensorAudioExecutor = {
-  arm(): Promise<void>;
-  execute(range: MediaTimelineRange): Promise<void>;
-  updateOptions(options: CensorAudioOptions): void;
-  stop(): void;
 };
 
 export type CensorAudioOptions = { effect?: CensorAudioEffectValue };
@@ -31,14 +20,7 @@ type ScheduledRange = {
   timer?: ReturnType<typeof setTimeout>;
 };
 
-export function createCensorAudioExecutor(
-  getMedia: () => HTMLMediaElement | null,
-  options: CensorAudioOptions = {},
-): CensorAudioExecutor {
-  return new CensorAudioExecutorImpl(getMedia, options);
-}
-
-class CensorAudioExecutorImpl implements CensorAudioExecutor {
+export class CensorAudioExecutor {
   private effect: CensorAudioEffectValue;
   private graph: PlaybackGraph | undefined;
   private pendingGraph: { media: HTMLMediaElement; promise: Promise<PlaybackGraph> } | undefined;
@@ -50,7 +32,7 @@ class CensorAudioExecutorImpl implements CensorAudioExecutor {
 
   constructor(
     private readonly getMedia: () => HTMLMediaElement | null,
-    options: CensorAudioOptions,
+    options: CensorAudioOptions = {},
   ) {
     this.effect = options.effect ?? CensorAudioEffect.BEEP;
     this.playbackListeners = {
@@ -197,7 +179,7 @@ async function createPlaybackGraph(
   return {
     context: shared.context,
     media,
-    scheduler: createCensorWindowScheduler(shared.context, shared.gain),
+    scheduler: new CensorWindowScheduler(shared.context, shared.gain),
   };
 }
 

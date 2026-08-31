@@ -1,8 +1,5 @@
 import type { SpeechRecognizer } from '@beeper/speech';
-import {
-  createVoskSandboxSpeechRecognizer,
-  type VoskSandboxSpeechRecognizerOptions,
-} from '@beeper/vosk';
+import { VoskSandboxSpeechRecognizer, type VoskSandboxSpeechRecognizerOptions } from '@beeper/vosk';
 
 let recognizer: SpeechRecognizer | undefined;
 
@@ -11,7 +8,7 @@ export function getVoskContentRecognizer(
 ): SpeechRecognizer {
   if (recognizer) return recognizer;
 
-  recognizer = createVoskSandboxSpeechRecognizer(options);
+  recognizer = new VoskSandboxSpeechRecognizer(options);
   // The page-scoped model load must outlive individual Censor sessions.
   void recognizer.preload().catch(() => undefined);
   return recognizer;

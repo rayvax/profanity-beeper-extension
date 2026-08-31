@@ -1,19 +1,11 @@
+import { CensorAudioExecutor, DelayedCensoredPlayback } from '@beeper/audio';
 import {
-  createCensorAudioExecutor,
-  createDelayedCensoredPlayback,
-  type DelayedCensoredPlayback,
-} from '@beeper/audio';
-import {
-  createCensorLexiconFromSettings,
+  createChunkMatcherFromSettings,
   type CensorRange,
   type CensorSettings,
 } from '@beeper/core';
 import type { SpeechRecognizer } from '@beeper/speech';
-import {
-  createDelayedVideoRenderer,
-  findPlayerMedia,
-  YoutubeTimedtextSource,
-} from '@beeper/youtube';
+import { DelayedVideoRenderer, findPlayerMedia, YoutubeTimedtextSource } from '@beeper/youtube';
 
 import type { TimedCensorSessionOptions } from './caption-beeper';
 import { SpeechTranscriptSource } from './speech-transcript-source';
@@ -28,15 +20,15 @@ export function createTimedtextCensorSessionOptions(
   settings: CensorSettings,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  const executor = createCensorAudioExecutor(findPlayerMedia, {
+  const executor = new CensorAudioExecutor(findPlayerMedia, {
     effect: settings.effect,
   });
   const sessionOptions: TimedCensorSessionOptions = {
     source: new YoutubeTimedtextSource(),
-    lexicon: createCensorLexiconFromSettings(settings),
+    matcher: createChunkMatcherFromSettings(settings),
     executor,
     updateSettings(nextSettings) {
-      sessionOptions.lexicon = createCensorLexiconFromSettings(nextSettings);
+      sessionOptions.matcher = createChunkMatcherFromSettings(nextSettings);
       executor.updateOptions({ effect: nextSettings.effect });
     },
     onStatus,
@@ -49,7 +41,7 @@ export function createMlCensorSessionOptions(
   mlOptions: MlCensorSessionOptions,
   onStatus?: TimedCensorSessionOptions['onStatus'],
 ): TimedCensorSessionOptions {
-  const playback = createDelayedCensoredPlayback(findPlayerMedia, {
+  const playback = new DelayedCensoredPlayback(findPlayerMedia, {
     delaySeconds: settings.delaySeconds,
     effect: settings.effect,
     workletUrl: mlOptions.workletUrl,
@@ -57,12 +49,12 @@ export function createMlCensorSessionOptions(
   const executor = new MlCensorExecutor(findPlayerMedia, playback, settings.delaySeconds);
   const sessionOptions: TimedCensorSessionOptions = {
     source: new SpeechTranscriptSource(mlOptions.recognizer, findPlayerMedia, playback.audioInput),
-    lexicon: createCensorLexiconFromSettings(settings),
+    matcher: createChunkMatcherFromSettings(settings),
     executor,
     armOnInteraction: true,
     onTranscript: mlOptions.onTranscript,
     updateSettings(nextSettings) {
-      sessionOptions.lexicon = createCensorLexiconFromSettings(nextSettings);
+      sessionOptions.matcher = createChunkMatcherFromSettings(nextSettings);
       playback.updateOptions({
         delaySeconds: nextSettings.delaySeconds,
         effect: nextSettings.effect,
@@ -82,7 +74,7 @@ export type MlPlaybackExecutor = {
 };
 
 export class MlCensorExecutor implements MlPlaybackExecutor {
-  private renderer: ReturnType<typeof createDelayedVideoRenderer> | undefined;
+  private renderer: DelayedVideoRenderer | undefined;
   private readonly failureListeners = new Set<(error: unknown) => void>();
   private readonly rendererOptions: { delaySeconds: number; onError(error: unknown): void };
 
@@ -109,7 +101,7 @@ export class MlCensorExecutor implements MlPlaybackExecutor {
       throw new Error('Player video not found');
     }
     this.renderer?.stop();
-    this.renderer = createDelayedVideoRenderer(media, this.rendererOptions);
+    this.renderer = new DelayedVideoRenderer(media, this.rendererOptions);
   }
 
   onError(listener: (error: unknown) => void): () => void {

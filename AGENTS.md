@@ -11,7 +11,7 @@ Bun monorepo for **SoapTheMouth** — a Manifest V3 Chrome extension that detect
 | Path | Package | Role |
 |------|---------|------|
 | `apps/extension` | `@beeper/extension` | WXT app — Chrome API ports (`lib/chrome-*`), thin entrypoint wiring |
-| `packages/core` | `@beeper/core` | Message protocol, trigger-word matching, transcript seam, player indicator |
+| `packages/core` | `@beeper/core` | Message protocol, chunk matching, transcript seam, player indicator |
 | `packages/youtube` | `@beeper/youtube` | DOM transcript source, `signalPlayer` (no `chrome.*`) |
 | `packages/audio` | `@beeper/audio` | Web Audio beep (no `chrome.*`) |
 | `packages/speech` | `@beeper/speech` | Model-independent speech-recognition contract |

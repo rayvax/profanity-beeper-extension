@@ -1,7 +1,3 @@
-export type DelayedVideoRenderer = {
-  stop(): void;
-};
-
 export type DelayedVideoRendererOptions = {
   delaySeconds: number;
   onError(error: unknown): void;
@@ -13,14 +9,7 @@ type BufferedFrame = {
 };
 
 /** Renders video frames behind real time so the canvas matches delayed playback. */
-export function createDelayedVideoRenderer(
-  video: HTMLVideoElement,
-  options: DelayedVideoRendererOptions,
-): DelayedVideoRenderer {
-  return new DelayedVideoRendererImpl(video, options);
-}
-
-class DelayedVideoRendererImpl implements DelayedVideoRenderer {
+export class DelayedVideoRenderer {
   private readonly container: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly output: CanvasRenderingContext2D;

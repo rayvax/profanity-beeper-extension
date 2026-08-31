@@ -1,16 +1,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import {
-  MessageType,
-  Messaging,
+  ChunkMatcher,
   createDefaultCensorSettings,
   type CensorExecutor,
-  type CensorLexicon,
-  type MessageTransport,
   type TranscriptSession,
   type TranscriptSource,
   type TranscriptSourceOptions,
 } from '@beeper/core';
+
+import { YoutubeEvent } from '@beeper/youtube';
 
 import { startCaptionBeeper } from './caption-beeper';
 
@@ -46,10 +45,6 @@ class DeferredTranscriptSource implements TranscriptSource {
   }
 }
 
-class TranscriptSourceWithSourceProperty extends FakeTranscriptSource {
-  source = 'still a transcript source';
-}
-
 class DeferredCensorExecutor implements CensorExecutor {
   readonly rejecters: Array<(reason?: unknown) => void> = [];
 
@@ -63,8 +58,12 @@ class ArmableCensorExecutor implements CensorExecutor {
   readonly execute = mock(async () => {});
 }
 
-function createMessaging(sendImpl: MessageTransport['send']): Messaging {
-  return new Messaging({ send: sendImpl, addListener: () => () => {} });
+function badWordMatcher(): ChunkMatcher {
+  return new ChunkMatcher({ terms: ['bad'] });
+}
+
+function cleanMatcher(): ChunkMatcher {
+  return new ChunkMatcher();
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -83,6 +82,7 @@ describe('startCaptionBeeper', () => {
   beforeEach(() => {
     originalConsoleError = console.error;
     document.body.innerHTML = `<div class="html5-video-player"></div>`;
+    window.history.pushState({}, '', '/watch?v=test123');
   });
 
   afterEach(() => {
@@ -92,38 +92,11 @@ describe('startCaptionBeeper', () => {
 
   test('binds injected transcript source on watch page', async () => {
     const source = new FakeTranscriptSource();
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+    startCaptionBeeper({
       source,
-    );
-
-    await flushMicrotasks();
-
-    expect(source.lastBindOptions).toBeDefined();
-  });
-
-  test('transcript chunk sends WORD_CAPTURED through messaging', async () => {
-    const send = mock(async () => ({ ok: true, censored: false }));
-    const source = new FakeTranscriptSource();
-
-    startCaptionBeeper(createMessaging(send), source);
-    await flushMicrotasks();
-
-    source.lastBindOptions?.onChunk({ text: 'hello' });
-    await flushMicrotasks();
-
-    expect(send).toHaveBeenCalledWith({
-      type: MessageType.WORD_CAPTURED,
-      word: 'hello',
+      matcher: cleanMatcher(),
+      executor: { execute: mock(() => {}) },
     });
-  });
-
-  test('keeps accepting a Transcript source with a source property', async () => {
-    const source = new TranscriptSourceWithSourceProperty();
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      source,
-    );
 
     await flushMicrotasks();
 
@@ -131,16 +104,14 @@ describe('startCaptionBeeper', () => {
   });
 
   test('executes Censor ranges through injected timed-session seams', async () => {
-    const send = mock(async () => ({ ok: true, censored: false }));
     const source = new FakeTranscriptSource();
     const executor: CensorExecutor = { execute: mock(() => {}) };
-    const lexicon: CensorLexicon = { matches: (token) => token === 'bad' };
     const statuses: string[] = [];
     const onTranscript = mock(() => {});
 
-    startCaptionBeeper(createMessaging(send), {
+    startCaptionBeeper({
       source,
-      lexicon,
+      matcher: badWordMatcher(),
       executor,
       onTranscript,
       onStatus: (status) => statuses.push(status),
@@ -155,8 +126,7 @@ describe('startCaptionBeeper', () => {
       chunk: { text: 'bad', startTime: 4, endTime: 5 },
       censored: true,
     });
-    expect(send).not.toHaveBeenCalled();
-    expect(statuses).toEqual(['loading', 'working']);
+    expect(statuses).toEqual(['waiting', 'working']);
   });
 
   test('restores playback before reporting an executor failure', async () => {
@@ -169,15 +139,12 @@ describe('startCaptionBeeper', () => {
       stop,
     };
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: (token) => token === 'bad' },
-        executor,
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: badWordMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
     stop.mockClear();
 
@@ -192,59 +159,50 @@ describe('startCaptionBeeper', () => {
     const source = new FakeTranscriptSource();
     const executor = new ArmableCensorExecutor();
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: () => false },
-        executor,
-        armOnInteraction: true,
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor,
+      armOnInteraction: true,
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
 
-    expect(statuses).toEqual(['loading']);
+    expect(statuses).toEqual(['waiting']);
     expect(executor.arm).not.toHaveBeenCalled();
 
     document.dispatchEvent(new Event('pointerdown'));
     await flushMicrotasks();
 
     expect(executor.arm).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(['loading', 'working']);
+    expect(statuses).toEqual(['waiting', 'working']);
   });
 
   test('does not gate timedtext playback on an interaction', async () => {
     const source = new FakeTranscriptSource();
     const executor = new ArmableCensorExecutor();
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: () => false },
-        executor,
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
 
     expect(executor.arm).not.toHaveBeenCalled();
-    expect(statuses).toEqual(['loading', 'working']);
+    expect(statuses).toEqual(['waiting', 'working']);
   });
 
   test('updates active settings without rebinding the transcript source', async () => {
     const source = new FakeTranscriptSource();
     const updateSettings = mock(() => {});
-    const session = startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: () => false },
-        executor: { execute: mock(async () => {}) },
-        updateSettings,
-      },
-    );
+    const session = startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor: { execute: mock(async () => {}) },
+      updateSettings,
+    });
     await flushMicrotasks();
     source.stop.mockClear();
     const settings = { ...createDefaultCensorSettings(), delaySeconds: 2 };
@@ -259,15 +217,12 @@ describe('startCaptionBeeper', () => {
     const source = new FakeTranscriptSource();
     const stop = mock(() => {});
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: () => false },
-        executor: { execute: mock(async () => {}), stop },
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor: { execute: mock(async () => {}), stop },
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
     stop.mockClear();
 
@@ -283,62 +238,82 @@ describe('startCaptionBeeper', () => {
     const statuses: string[] = [];
 
     console.error = errorSpy;
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: () => false },
-        executor: { execute: mock(async () => {}) },
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor: { execute: mock(async () => {}) },
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
 
     expect(errorSpy).toHaveBeenCalled();
-    expect(statuses).toEqual(['loading', 'error']);
+    expect(statuses).toEqual(['waiting', 'error']);
   });
 
   test('does not report a navigation abort as a censor error', async () => {
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source: new AbortedTranscriptSource(),
-        lexicon: { matches: () => false },
-        executor: { execute: mock(async () => {}) },
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source: new AbortedTranscriptSource(),
+      matcher: cleanMatcher(),
+      executor: { execute: mock(async () => {}) },
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
 
-    expect(statuses).toEqual(['loading']);
+    expect(statuses).toEqual(['waiting']);
   });
 
   test('unbind stops transcript session on rebind', async () => {
     const source = new FakeTranscriptSource();
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+    startCaptionBeeper({
       source,
-    );
+      matcher: cleanMatcher(),
+      executor: { execute: mock(() => {}) },
+    });
     await flushMicrotasks();
 
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    // Different video id: same-page yt-navigate-finish must rebind.
+    window.history.pushState({}, '', '/watch?v=other456');
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(source.stop).toHaveBeenCalled();
+  });
+
+  test('same-video yt-navigate-finish does not rebind', async () => {
+    const source = new FakeTranscriptSource();
+    const statuses: string[] = [];
+    startCaptionBeeper({
+      source,
+      matcher: cleanMatcher(),
+      executor: { execute: mock(() => {}) },
+      onStatus: (status) => statuses.push(status),
+    });
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['waiting', 'working']);
+
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(source.stop).not.toHaveBeenCalled();
+    expect(statuses).toEqual(['waiting', 'working']);
   });
 
   test('stops a stale session that finishes binding after a rebind', async () => {
     const source = new DeferredTranscriptSource();
     const staleStop = mock(() => {});
     const currentStop = mock(() => {});
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
+    startCaptionBeeper({
       source,
-    );
+      matcher: cleanMatcher(),
+      executor: { execute: mock(() => {}) },
+    });
     await flushMicrotasks();
 
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    // Different video id: same-page yt-navigate-finish must rebind.
+    window.history.pushState({}, '', '/watch?v=other456');
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
     source.resolvers[0]?.({ stop: staleStop });
     source.resolvers[1]?.({ stop: currentStop });
@@ -352,19 +327,17 @@ describe('startCaptionBeeper', () => {
     const source = new FakeTranscriptSource();
     const executor = new DeferredCensorExecutor();
     const statuses: string[] = [];
-    startCaptionBeeper(
-      createMessaging(async () => ({ ok: true, censored: false })),
-      {
-        source,
-        lexicon: { matches: (token) => token === 'bad' },
-        executor,
-        onStatus: (status) => statuses.push(status),
-      },
-    );
+    startCaptionBeeper({
+      source,
+      matcher: badWordMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
     await flushMicrotasks();
 
     source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
-    document.dispatchEvent(new Event('yt-navigate-finish'));
+    window.history.pushState({}, '', '/watch?v=other456');
+    document.dispatchEvent(new Event(YoutubeEvent.NAVIGATE_FINISH));
     await new Promise((resolve) => setTimeout(resolve, 200));
     executor.rejecters[0]?.(new Error('stale executor failed'));
     await flushMicrotasks();

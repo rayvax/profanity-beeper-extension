@@ -40,16 +40,20 @@ _Avoid_: `create*` factories for stateful objects
 A `TranscriptSource` that derives transcript chunks from video audio through a local, replaceable speech-recognition model. Vosk is the sole bundled model in the first release; model replacement is a developer-facing contract. It is an alternative to the caption-based source, not their combined mode.
 _Avoid_: Hybrid source, caption fallback
 
-**Censor lexicon**:
-A replaceable set of rules that identifies transcript content requiring censorship. It has a default Russian preset and user overrides for literal words, whitelist entries, and RegExp; every rule evaluates one normalised timed word.
-_Avoid_: Profanity list, bad-word regexes
+**Chunk matcher**:
+The replaceable classifier (`ChunkMatcher`) that decides whether transcript content requires censorship. It combines bundled Match config defaults with user overrides for literal words, whitelist entries, and RegExp. Rules evaluate one normalised Censor token; config patterns may also test the whole chunk for non-word markers such as `[ __ ]`.
+_Avoid_: Profanity list, bad-word regexes, lexicon
+
+**Match config**:
+The data shape (`patterns` + `terms`) behind a Chunk matcher. Defaults live in `config/match-defaults/{lang}.json` and ship bundled with the extension.
+_Avoid_: Rule file, wordlist JSON
 
 **Censor token**:
 The form of a timed word presented to a Censor lexicon: Unicode-normalised, lowercase, stripped of edge punctuation, and with `ё` folded to `е`.
 _Avoid_: Raw recognition word, caption fragment
 
 **Whitelist**:
-The Censor token entries that are explicitly exempt from censorship. A Whitelist match takes precedence over every Censor lexicon rule.
+The Censor token entries that are explicitly exempt from censorship. A Whitelist match takes precedence over every Chunk matcher rule targeting that token.
 _Avoid_: Exception list, negative rule
 
 **Censor executor**:
@@ -61,7 +65,7 @@ A replaceable audible treatment applied by the Censor executor during a censored
 _Avoid_: Beep implementation, mute mode
 
 **Censor settings**:
-The user's global, persisted choices of transcript source, Censor effect, delay (`1.2 s` default; `0.6–3 s` range), and Censor lexicon. A changed RegExp is validated before it replaces active settings, which apply immediately to the active tab. They are not scoped to a tab.
+The user's global, persisted choices of transcript source, Censor effect, delay (`1.2 s` default; `0.6–3 s` range), and Chunk matcher overrides. A changed RegExp is validated before it replaces active settings, which apply immediately to the active tab. They are not scoped to a tab.
 _Avoid_: Per-tab settings, session-only preferences
 
 **Censor status**:

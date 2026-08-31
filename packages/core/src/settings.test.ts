@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  createCensorLexiconFromSettings,
+  createChunkMatcherFromSettings,
   createDefaultCensorSettings,
   validateCensorSettings,
 } from './index';
@@ -40,15 +40,21 @@ describe('Censor settings', () => {
   });
 
   test('lets the Whitelist override default and user Censor rules', () => {
-    const lexicon = createCensorLexiconFromSettings({
+    const matcher = createChunkMatcherFromSettings({
       ...createDefaultCensorSettings(),
       literalAdditions: ['гадость'],
       patterns: ['^дурак$'],
       whitelist: ['ебаный', 'гадость', 'дурак'],
     });
 
-    expect(lexicon.matches('ебаный')).toBe(false);
-    expect(lexicon.matches('гадость')).toBe(false);
-    expect(lexicon.matches('дурак')).toBe(false);
+    expect(matcher.matches('ебаный')).toBe(false);
+    expect(matcher.matches('гадость')).toBe(false);
+    expect(matcher.matches('дурак')).toBe(false);
+  });
+
+  test('matches the bundled YouTube censor token with default settings', () => {
+    const matcher = createChunkMatcherFromSettings(createDefaultCensorSettings());
+
+    expect(matcher.matches('[ __ ]')).toBe(true);
   });
 });

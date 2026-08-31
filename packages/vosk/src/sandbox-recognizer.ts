@@ -23,13 +23,7 @@ export type VoskSandboxSpeechRecognizerOptions = {
 };
 
 /** Bridges the sandbox-only Vosk runtime to the model-independent contract. */
-export function createVoskSandboxSpeechRecognizer(
-  options: VoskSandboxSpeechRecognizerOptions,
-): SpeechRecognizer {
-  return new VoskSandboxSpeechRecognizerImpl(options);
-}
-
-class VoskSandboxSpeechRecognizerImpl implements SpeechRecognizer {
+export class VoskSandboxSpeechRecognizer implements SpeechRecognizer {
   private readonly fetchModel: typeof globalThis.fetch;
   private sandbox: VoskSandbox | undefined;
   private preloadPromise: Promise<void> | undefined;

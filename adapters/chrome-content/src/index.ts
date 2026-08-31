@@ -1,11 +1,7 @@
 export { startCaptionBeeper } from './caption-beeper';
 export { startCensorContentRuntime } from './content-runtime';
 export type { CensorContentRuntime, CensorContentRuntimeDependencies } from './content-runtime';
-export type {
-  CensorSessionStatus,
-  TimedCensorSessionOptions,
-  TranscriptBeeperSession,
-} from './caption-beeper';
+export type { TimedCensorSessionOptions, TranscriptBeeperSession } from './caption-beeper';
 export { createTimedtextCensorSessionOptions } from './transcript-session-options';
 export { createMlCensorSessionOptions } from './transcript-session-options';
 export type { MlCensorSessionOptions } from './transcript-session-options';

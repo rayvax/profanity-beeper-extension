@@ -10,4 +10,3 @@ export type { CensorSettings, CensorStatusValue } from '@beeper/core';
 export { registerCensorAudioHandler } from './censor-audio-handler';
 export { registerCensorController } from './censor-controller';
 export type { CensorControllerPorts } from './censor-controller';
-export { registerWordCapturedHandler } from './word-captured-handler';

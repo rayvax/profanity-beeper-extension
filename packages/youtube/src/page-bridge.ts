@@ -39,10 +39,6 @@ export function getMoviePlayer(): MoviePlayer | null {
   return document.getElementById('movie_player') as MoviePlayer | null;
 }
 
-export function getVideoIdFromUrl(): string | null {
-  return new URL(window.location.href).searchParams.get('v');
-}
-
 function extractPlayerResponseFromScripts(): unknown | null {
   for (const script of document.scripts) {
     const text = script.textContent ?? '';

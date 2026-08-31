@@ -1,4 +1,5 @@
-import { createCensorLexicon, type CensorLexicon } from './censor';
+import { ChunkMatcher } from './chunk-matcher';
+import { BUNDLED_MATCH_CONFIG } from './match-config';
 
 export const CensorSource = {
   CAPTIONS: 'captions',
@@ -30,30 +31,6 @@ const DEFAULT_DELAY_SECONDS = 1.2;
 const MIN_DELAY_SECONDS = 0.6;
 const MAX_DELAY_SECONDS = 3;
 const MAX_PATTERN_LENGTH = 256;
-
-const DEFAULT_RUSSIAN_CENSOR_WORDS = [
-  'блядь',
-  'блядюга',
-  'блять',
-  'ебать',
-  'ебал',
-  'ебался',
-  'еблан',
-  'ебаный',
-  'ебанутая',
-  'ебануть',
-  'мудак',
-  'пизда',
-  'пиздец',
-  'пиздёж',
-  'сука',
-  'хуй',
-  'хуя',
-  'хуйлан',
-  'хуе',
-  'хуйло',
-  'бля',
-] as const;
 
 // https://www.youtube.com/watch?v=wls9_A9WfJ8
 
@@ -127,14 +104,10 @@ function isCensorSettingsShape(value: unknown): value is CensorSettings {
   );
 }
 
-export function createCensorLexiconFromSettings(settings: CensorSettings): CensorLexicon {
-  return createCensorLexicon({
-    literalWords: [...DEFAULT_RUSSIAN_CENSOR_WORDS, ...settings.literalAdditions],
-    patterns: settings.patterns.map((pattern) => new RegExp(pattern, 'u')),
+export function createChunkMatcherFromSettings(settings: CensorSettings): ChunkMatcher {
+  return new ChunkMatcher({
+    terms: [...BUNDLED_MATCH_CONFIG.terms, ...settings.literalAdditions],
+    patterns: [...BUNDLED_MATCH_CONFIG.patterns, ...settings.patterns],
     whitelist: settings.whitelist,
   });
-}
-
-export function createDefaultRussianCensorLexicon(): CensorLexicon {
-  return createCensorLexiconFromSettings(createDefaultCensorSettings());
 }

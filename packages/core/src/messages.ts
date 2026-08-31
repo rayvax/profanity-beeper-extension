@@ -1,8 +1,7 @@
 import type { CensorSettings } from './settings';
 
 export const MessageType = {
-  WORD_CAPTURED: 'WORD_CAPTURED',
-  WORD_CENSORED: 'WORD_CENSORED',
+  CHUNK_CENSORED: 'CHUNK_CENSORED',
   GET_CENSOR_SETTINGS: 'GET_CENSOR_SETTINGS',
   UPDATE_CENSOR_SETTINGS: 'UPDATE_CENSOR_SETTINGS',
   CENSOR_SETTINGS_UPDATED: 'CENSOR_SETTINGS_UPDATED',
@@ -20,12 +19,8 @@ export const CensorStatus = {
 export type CensorStatusValue = (typeof CensorStatus)[keyof typeof CensorStatus];
 
 export type MessageMap = {
-  [MessageType.WORD_CAPTURED]: {
-    request: { word: string };
-    response: { ok: true; censored: boolean } | { ok: false; error: string };
-  };
-  [MessageType.WORD_CENSORED]: {
-    request: Record<string, never>;
+  [MessageType.CHUNK_CENSORED]: {
+    request: { text: string };
     response: void;
   };
   [MessageType.GET_CENSOR_SETTINGS]: {
@@ -76,8 +71,7 @@ export type ExtensionMessage = {
   [K in MessageTypeValue]: RequestOf<K>;
 }[MessageTypeValue];
 
-export type WordCapturedMessage = RequestOf<typeof MessageType.WORD_CAPTURED>;
-export type WordCensoredMessage = RequestOf<typeof MessageType.WORD_CENSORED>;
+export type ChunkCensoredMessage = RequestOf<typeof MessageType.CHUNK_CENSORED>;
 
 export function isMessageOfType<T extends MessageTypeValue>(
   message: unknown,

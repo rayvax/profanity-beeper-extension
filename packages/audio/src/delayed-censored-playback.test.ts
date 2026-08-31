@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-import { createCensorAudioExecutor } from './censor-audio-executor';
-import { createDelayedCensoredPlayback } from './delayed-censored-playback';
+import { CensorAudioExecutor } from './censor-audio-executor';
+import { DelayedCensoredPlayback } from './delayed-censored-playback';
 
 class FakeAudioContext {
   currentTime = 10;
@@ -51,7 +51,7 @@ class FakeAudioContext {
 let originalAudioContext: typeof AudioContext | undefined;
 let context: FakeAudioContext;
 
-describe('createDelayedCensoredPlayback', () => {
+describe('DelayedCensoredPlayback', () => {
   beforeEach(() => {
     originalAudioContext = globalThis.AudioContext;
     context = new FakeAudioContext();
@@ -68,7 +68,7 @@ describe('createDelayedCensoredPlayback', () => {
 
   test('delays one shared censor window around a timed word', async () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -89,7 +89,7 @@ describe('createDelayedCensoredPlayback', () => {
       currentTime: 10,
       playbackRate: 2,
     }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -107,7 +107,7 @@ describe('createDelayedCensoredPlayback', () => {
       currentTime: 14,
       playbackRate: 2,
     }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -125,7 +125,7 @@ describe('createDelayedCensoredPlayback', () => {
       currentTime: 10,
       playbackRate: 1,
     }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -148,7 +148,7 @@ describe('createDelayedCensoredPlayback', () => {
       currentTime: 10,
       playbackRate: 1,
     }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -177,7 +177,7 @@ describe('createDelayedCensoredPlayback', () => {
       currentTime: 10,
       playbackRate: 0.5,
     }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -191,7 +191,7 @@ describe('createDelayedCensoredPlayback', () => {
 
   test('restores immediate unmuted audio when stopped', async () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -210,8 +210,8 @@ describe('createDelayedCensoredPlayback', () => {
       paused: false,
       playbackRate: 1,
     }) as HTMLMediaElement;
-    const captions = createCensorAudioExecutor(() => media);
-    const ml = createDelayedCensoredPlayback(() => media, {
+    const captions = new CensorAudioExecutor(() => media);
+    const ml = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -230,7 +230,7 @@ describe('createDelayedCensoredPlayback', () => {
       throw new Error('tap unavailable');
     });
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -244,7 +244,7 @@ describe('createDelayedCensoredPlayback', () => {
 
   test('reschedules adjacent future ranges without muting clean audio early', async () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'silence',
       workletUrl: 'chrome-extension://test/audio-worklet.js',
@@ -266,7 +266,7 @@ describe('createDelayedCensoredPlayback', () => {
 
   test('moves pending windows and replaces their effect when settings change', async () => {
     const media = Object.assign(new EventTarget(), { currentTime: 10 }) as HTMLMediaElement;
-    const playback = createDelayedCensoredPlayback(() => media, {
+    const playback = new DelayedCensoredPlayback(() => media, {
       delaySeconds: 1.2,
       effect: 'beep',
       workletUrl: 'chrome-extension://test/audio-worklet.js',

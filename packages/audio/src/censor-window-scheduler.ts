@@ -5,11 +5,6 @@ export type CensorAudioWindow = {
   end: number;
 };
 
-export type CensorWindowScheduler = {
-  replace(windows: CensorAudioWindow[], effect: CensorAudioEffectValue): void;
-  stop(): void;
-};
-
 const FADE_SECONDS = 0.01;
 const DEFAULT_MERGE_GAP_SECONDS = 0.05;
 
@@ -17,15 +12,7 @@ const DEFAULT_MERGE_GAP_SECONDS = 0.05;
  * Owns the shared audio-side Censor behavior for every Transcript source:
  * merge windows, fade the original audio, and schedule the selected effect.
  */
-export function createCensorWindowScheduler(
-  context: AudioContext,
-  gain: GainNode,
-  mergeGapSeconds = DEFAULT_MERGE_GAP_SECONDS,
-): CensorWindowScheduler {
-  return new CensorWindowSchedulerImpl(context, gain, mergeGapSeconds);
-}
-
-class CensorWindowSchedulerImpl implements CensorWindowScheduler {
+export class CensorWindowScheduler {
   private oscillators: Array<{ window: CensorAudioWindow; node: OscillatorNode }> = [];
   private currentWindows: CensorAudioWindow[] = [];
   private currentEffect: CensorAudioEffectValue | undefined;
@@ -33,7 +20,7 @@ class CensorWindowSchedulerImpl implements CensorWindowScheduler {
   constructor(
     private readonly context: AudioContext,
     private readonly gain: GainNode,
-    private readonly mergeGapSeconds: number,
+    private readonly mergeGapSeconds = DEFAULT_MERGE_GAP_SECONDS,
   ) {}
 
   replace(windows: CensorAudioWindow[], effect: CensorAudioEffectValue): void {

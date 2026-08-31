@@ -1,13 +1,13 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
-import { createDelayedVideoRenderer } from './delayed-video-renderer';
+import { DelayedVideoRenderer } from './delayed-video-renderer';
 
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext;
 let originalRequestAnimationFrame: typeof requestAnimationFrame;
 let originalCancelAnimationFrame: typeof cancelAnimationFrame;
 
-describe('createDelayedVideoRenderer', () => {
+describe('DelayedVideoRenderer', () => {
   beforeAll(() => {
     if (!GlobalRegistrator.isRegistered) {
       GlobalRegistrator.register({ url: 'https://www.youtube.com/watch?v=video' });
@@ -40,7 +40,7 @@ describe('createDelayedVideoRenderer', () => {
       value: mock(() => 1),
     });
 
-    const renderer = createDelayedVideoRenderer(video, {
+    const renderer = new DelayedVideoRenderer(video, {
       delaySeconds: 1.2,
       onError: mock(() => {}),
     });
@@ -92,7 +92,7 @@ describe('createDelayedVideoRenderer', () => {
       },
     });
 
-    const renderer = createDelayedVideoRenderer(video, {
+    const renderer = new DelayedVideoRenderer(video, {
       delaySeconds: 2,
       onError: mock(() => {}),
     });
@@ -112,7 +112,7 @@ describe('createDelayedVideoRenderer', () => {
       value: mock(() => 1),
     });
 
-    const renderer = createDelayedVideoRenderer(video, {
+    const renderer = new DelayedVideoRenderer(video, {
       delaySeconds: 1.2,
       onError: mock(() => {}),
     });
@@ -155,7 +155,7 @@ describe('createDelayedVideoRenderer', () => {
       },
     });
 
-    const renderer = createDelayedVideoRenderer(video, {
+    const renderer = new DelayedVideoRenderer(video, {
       delaySeconds: 2,
       onError: mock(() => {}),
     });

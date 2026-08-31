@@ -1,2 +1,2 @@
-export { createVoskSandboxSpeechRecognizer } from './sandbox-recognizer';
+export { VoskSandboxSpeechRecognizer } from './sandbox-recognizer';
 export type { VoskSandboxSpeechRecognizerOptions } from './sandbox-recognizer';

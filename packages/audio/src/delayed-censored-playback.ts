@@ -1,10 +1,6 @@
 import { acquireMediaGraph } from './media-graph';
 import type { CensorAudioEffectValue } from './censor-effect';
-import {
-  createCensorWindowScheduler,
-  type CensorAudioWindow,
-  type CensorWindowScheduler,
-} from './censor-window-scheduler';
+import { CensorWindowScheduler, type CensorAudioWindow } from './censor-window-scheduler';
 
 export type DelayedCensorRange = {
   startTime: number;
@@ -16,14 +12,6 @@ export type DelayedCensorRange = {
 export type PcmAudioInput = {
   readonly sampleRate: Promise<number>;
   subscribe(listener: (pcm: ArrayBuffer) => void): () => void;
-};
-
-export type DelayedCensoredPlayback = {
-  readonly audioInput: PcmAudioInput;
-  arm(): Promise<void>;
-  execute(range: DelayedCensorRange): Promise<void>;
-  updateOptions(options: Pick<DelayedCensoredPlaybackOptions, 'delaySeconds' | 'effect'>): void;
-  stop(): void;
 };
 
 export type DelayedCensoredPlaybackOptions = {
@@ -60,14 +48,7 @@ const MIN_WINDOW_SECONDS = 0.05;
  * Delivers the viewer-facing audio late enough for local recognition to
  * schedule a shared beep-or-silence effect before the matching word arrives.
  */
-export function createDelayedCensoredPlayback(
-  getMedia: () => HTMLMediaElement | null,
-  options: DelayedCensoredPlaybackOptions,
-): DelayedCensoredPlayback {
-  return new DelayedCensoredPlaybackImpl(getMedia, options);
-}
-
-class DelayedCensoredPlaybackImpl implements DelayedCensoredPlayback {
+export class DelayedCensoredPlayback {
   readonly audioInput: PcmAudioInput;
   private readonly currentOptions: DelayedCensoredPlaybackOptions;
   private readonly listeners = new Set<(pcm: ArrayBuffer) => void>();
@@ -193,7 +174,7 @@ async function createGraph(
     tap,
     active: true,
     windows: [],
-    scheduler: createCensorWindowScheduler(
+    scheduler: new CensorWindowScheduler(
       context,
       shared.gain,
       options.mergeGapSeconds ?? DEFAULT_MERGE_GAP_SECONDS,

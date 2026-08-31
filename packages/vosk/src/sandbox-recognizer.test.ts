@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
-import { createVoskSandboxSpeechRecognizer } from './sandbox-recognizer';
+import { VoskSandboxSpeechRecognizer } from './sandbox-recognizer';
 
 async function flushMicrotasks(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -18,7 +18,7 @@ function emitSandboxMessage(iframe: HTMLIFrameElement, data: unknown): void {
 
 async function preloadRecognizer() {
   const fetchModel = mock(async () => new Response(new Uint8Array([1, 2, 3])));
-  const recognizer = createVoskSandboxSpeechRecognizer({
+  const recognizer = new VoskSandboxSpeechRecognizer({
     modelUrl: 'chrome-extension://test/model.tar.gz',
     sandboxUrl: 'about:blank',
     fetch: fetchModel,
@@ -127,7 +127,7 @@ describe('Vosk sandbox speech recognizer', () => {
   });
 
   test('rejects preload when the sandbox reports a model error', async () => {
-    const recognizer = createVoskSandboxSpeechRecognizer({
+    const recognizer = new VoskSandboxSpeechRecognizer({
       modelUrl: 'chrome-extension://test/model.tar.gz',
       sandboxUrl: 'about:blank',
       fetch: async () => new Response(new Uint8Array([1, 2, 3])),
@@ -156,7 +156,7 @@ describe('Vosk sandbox speech recognizer', () => {
     });
     globalThis.fetch = fetchModel as typeof globalThis.fetch;
     try {
-      const recognizer = createVoskSandboxSpeechRecognizer({
+      const recognizer = new VoskSandboxSpeechRecognizer({
         modelUrl: 'chrome-extension://test/model.tar.gz',
         sandboxUrl: 'about:blank',
       });

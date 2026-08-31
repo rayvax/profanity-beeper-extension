@@ -4,3 +4,4 @@ apps/extension/.wxt/
 .scratch
 .tmp/
 .tmp-*
+.cursor/*.log
