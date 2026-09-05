@@ -47,6 +47,9 @@ export class DelayedCensoredPlayback {
   private readonly listeners = new Set<(pcm: ArrayBuffer) => void>();
   private sampleRatePromise = createPendingPromise<number>();
   private graph: PlaybackGraph | undefined;
+  private listeningTo: HTMLMediaElement | undefined;
+  private ownsSuspension = false;
+  private readonly failureListeners = new Set<(error: unknown) => void>();
 
   constructor(
     private readonly getMedia: () => HTMLMediaElement | null,
@@ -96,7 +99,14 @@ export class DelayedCensoredPlayback {
       this.graph.source.connect(this.graph.tap);
     }
 
-    if (this.graph.context.state === 'suspended') {
+    this.detachPlaybackListeners();
+    this.listeningTo = media;
+    media.addEventListener('pause', this.onPause);
+    media.addEventListener('play', this.onPlay);
+    if (media.paused) {
+      this.ownsSuspension = true;
+      await this.graph.context.suspend();
+    } else if (this.graph.context.state === 'suspended') {
       await this.graph.context.resume();
     }
     this.sampleRatePromise.resolve(this.graph.context.sampleRate);
@@ -110,6 +120,7 @@ export class DelayedCensoredPlayback {
   }
 
   stop(): void {
+    this.detachPlaybackListeners();
     this.listeners.clear();
     this.sampleRatePromise = createPendingPromise<number>();
     if (!this.graph) return;
@@ -120,6 +131,44 @@ export class DelayedCensoredPlayback {
     this.graph.windows = [];
     this.graph.scheduler.stop();
     this.graph.active = false;
+    // The graph is shared with caption mode and ordinary playback. Release
+    // our suspension even when suspend() has not resolved yet.
+    if (this.ownsSuspension) {
+      this.ownsSuspension = false;
+      void this.graph.context.resume().catch((error: unknown) => this.reportError(error));
+    }
+  }
+
+  onError(listener: (error: unknown) => void): () => void {
+    this.failureListeners.add(listener);
+    return () => this.failureListeners.delete(listener);
+  }
+
+  private readonly onPause = (): void => this.setPaused(true);
+  private readonly onPlay = (): void => this.setPaused(false);
+
+  private setPaused(paused: boolean): void {
+    const graph = this.graph;
+    if (!graph?.active) return;
+    this.ownsSuspension ||= paused;
+    // Freeze the context clock as well as its DelayNode buffer and scheduled
+    // censor effects; muting alone would drain the buffer during the pause.
+    const change = paused ? graph.context.suspend() : graph.context.resume();
+    void change.catch((error: unknown) => {
+      if (this.graph !== graph || !graph.active) return;
+      this.stop();
+      this.reportError(error);
+    });
+  }
+
+  private reportError(error: unknown): void {
+    this.failureListeners.forEach((listener) => listener(error));
+  }
+
+  private detachPlaybackListeners(): void {
+    this.listeningTo?.removeEventListener('pause', this.onPause);
+    this.listeningTo?.removeEventListener('play', this.onPlay);
+    this.listeningTo = undefined;
   }
 }
 

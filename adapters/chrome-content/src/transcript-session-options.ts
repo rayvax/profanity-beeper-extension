@@ -105,7 +105,11 @@ export class MlCensorExecutor implements CensorExecutor {
 
   onError(listener: (error: unknown) => void): () => void {
     this.failureListeners.add(listener);
-    return () => this.failureListeners.delete(listener);
+    const disposePlayback = this.playback.onError(listener);
+    return () => {
+      disposePlayback();
+      this.failureListeners.delete(listener);
+    };
   }
 
   stop(): void {

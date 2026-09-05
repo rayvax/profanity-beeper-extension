@@ -32,8 +32,6 @@ const MIN_DELAY_SECONDS = 0.6;
 const MAX_DELAY_SECONDS = 3;
 const MAX_PATTERN_LENGTH = 256;
 
-// https://www.youtube.com/watch?v=wls9_A9WfJ8
-
 export function createDefaultCensorSettings(): CensorSettings {
   return {
     source: CensorSource.CAPTIONS,

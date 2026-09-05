@@ -40,6 +40,7 @@ class FakeAudioContext {
   };
   audioWorklet = { addModule: mock(async () => Promise.reject(new Error('no worklet'))) };
   resume = mock(async () => {});
+  suspend = mock(async () => {});
   close = mock(async () => {});
   createMediaElementSource = mock(() => this.source);
   createDelay = mock(() => this.delay);
@@ -64,6 +65,94 @@ describe('DelayedCensoredPlayback', () => {
 
   afterEach(() => {
     globalThis.AudioContext = originalAudioContext as typeof AudioContext;
+  });
+
+  test('freezes buffered audio immediately on pause and resumes the same buffer', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 10,
+      paused: false,
+    }) as HTMLMediaElement;
+    const playback = new DelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'test.js',
+    });
+    await playback.arm();
+    context.resume.mockClear();
+    context.delay.delayTime.setValueAtTime.mockClear();
+    Object.assign(media, { paused: true });
+    media.dispatchEvent(new Event('pause'));
+    expect(context.suspend).toHaveBeenCalledTimes(1);
+    Object.assign(media, { paused: false });
+    media.dispatchEvent(new Event('play'));
+    expect(context.resume).toHaveBeenCalledTimes(1);
+    expect(context.delay.delayTime.setValueAtTime).not.toHaveBeenCalled();
+    playback.stop();
+  });
+
+  test('releases a pending pause on stop and removes media listeners', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 10,
+      paused: false,
+    }) as HTMLMediaElement;
+    const playback = new DelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'test.js',
+    });
+    await playback.arm();
+    const paused = Promise.withResolvers<void>();
+    context.suspend.mockImplementation(() => paused.promise);
+    context.resume.mockClear();
+    media.dispatchEvent(new Event('pause'));
+    playback.stop();
+    expect(context.resume).toHaveBeenCalledTimes(1);
+    paused.resolve();
+    await paused.promise;
+    media.dispatchEvent(new Event('pause'));
+    media.dispatchEvent(new Event('play'));
+    expect(context.suspend).toHaveBeenCalledTimes(1);
+    expect(context.resume).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps audio suspended when armed on an already paused video', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 10,
+      paused: true,
+    }) as HTMLMediaElement;
+    const playback = new DelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'test.js',
+    });
+    await playback.arm();
+    expect(context.suspend).toHaveBeenCalledTimes(1);
+    playback.stop();
+  });
+
+  test('reports resume failure and restores pass-through playback', async () => {
+    const media = Object.assign(new EventTarget(), {
+      currentTime: 10,
+      paused: false,
+    }) as HTMLMediaElement;
+    const playback = new DelayedCensoredPlayback(() => media, {
+      delaySeconds: 1.2,
+      effect: 'beep',
+      workletUrl: 'test.js',
+    });
+    await playback.arm();
+    const failure = new Error('resume failed');
+    const onError = mock(() => {});
+    const dispose = playback.onError(onError);
+    context.resume.mockRejectedValueOnce(failure);
+    media.dispatchEvent(new Event('pause'));
+    media.dispatchEvent(new Event('play'));
+    await Promise.resolve();
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(context.resume).toHaveBeenCalledTimes(3);
+    expect(context.delay.delayTime.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
+    await expect(playback.execute({ startTime: 10, endTime: 11 })).rejects.toThrow('not armed');
+    dispose();
   });
 
   test('delays one shared censor window around a timed word', async () => {
