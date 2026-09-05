@@ -1,19 +1,37 @@
-export { MessageType, isMessageOfType } from './messages';
+export { CensorStatus, MessageType, isMessageOfType } from './messages';
 export type {
   MessageMap,
   MessageTypeValue,
   RequestOf,
   ResponseOf,
   ExtensionMessage,
-  ChunkCapturedMessage,
   ChunkCensoredMessage,
+  CensorStatusValue,
+  MlTranscriptEntry,
 } from './messages';
-export { Messaging } from './messaging';
-export type { MessageTransport, ReplyCallback, MessageHandler } from './messaging';
+export { Messaging, createMessaging } from './messaging';
+export type { MessageContext, MessageTransport, ReplyCallback, MessageHandler } from './messaging';
+export { ChunkMatcher, normaliseCensorToken } from './chunk-matcher';
+export type { ChunkMatcherOptions } from './chunk-matcher';
 export type { MatchConfig } from './match-config';
-export { ChunkMatcher } from './chunk-matcher';
+export { BUNDLED_MATCH_CONFIG } from './match-config';
 export { PlayerIndicator } from './player-indicator';
 export type { PlayerIndicatorState } from './player-indicator';
+export { createCensorRanges } from './censor';
+export type { CensorActivation, CensorExecutor, CensorRange } from './censor';
+export {
+  CensorEffect,
+  CensorSource,
+  createChunkMatcherFromSettings,
+  createDefaultCensorSettings,
+  validateCensorSettings,
+} from './settings';
+export type {
+  CensorEffectValue,
+  CensorSettings,
+  CensorSettingsValidation,
+  CensorSourceValue,
+} from './settings';
 export type {
   TranscriptChunk,
   TranscriptSession,

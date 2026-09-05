@@ -5,9 +5,9 @@ export const chromeMessaging = new Messaging({
   addListener: (listener) => {
     const chromeListener = (
       message: unknown,
-      _sender: chrome.runtime.MessageSender,
+      sender: chrome.runtime.MessageSender,
       sendResponse: (response?: unknown) => void,
-    ) => listener(message, sendResponse);
+    ) => listener(message, { tabId: sender.tab?.id }, sendResponse);
     chrome.runtime.onMessage.addListener(chromeListener);
     return () => chrome.runtime.onMessage.removeListener(chromeListener);
   },

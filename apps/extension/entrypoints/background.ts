@@ -1,29 +1,19 @@
-import {
-  LiveChunkMatcher,
-  MatchConfigResolver,
-  registerChunkCapturedHandler,
-} from '@beeper/adapter-chrome-sw';
-import { BUNDLED_EN_MATCH_CONFIG } from '../lib/bundled-match-defaults';
-import { getUILanguage } from '../lib/chrome-i18n';
+import { registerCensorController } from '@beeper/adapter-chrome-sw';
 import { chromeMessaging } from '../lib/chrome-messaging';
+import { createChromeCensorPorts } from '../lib/chrome-censor-ports';
 import { ensureAudio } from '../lib/chrome-offscreen';
-import { chromeStorage, onMatchConfigStorageChanged } from '../lib/chrome-storage';
 
-export default defineBackground(async () => {
-  await ensureAudio();
+export default defineBackground(() => {
+  // Listeners must be registered synchronously: a content script message can
+  // wake the worker, and events dispatched before registration are lost.
+  const ports = createChromeCensorPorts();
+  registerCensorController(chromeMessaging, ports);
 
-  const resolver = new MatchConfigResolver({
-    fetch,
-    storagePort: chromeStorage,
-    language: getUILanguage(),
-    fallbackConfig: BUNDLED_EN_MATCH_CONFIG,
-  });
-
-  await resolver.refresh();
-
-  const matcher = await LiveChunkMatcher.create(resolver);
-  onMatchConfigStorageChanged(() => {
-    matcher.scheduleReload();
-  });
-  registerChunkCapturedHandler(chromeMessaging, matcher);
+  void (async () => {
+    try {
+      await ensureAudio();
+    } catch (error) {
+      console.error('[Censor] service worker startup failed', error);
+    }
+  })();
 });

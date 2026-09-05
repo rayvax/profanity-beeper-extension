@@ -1,0 +1,13 @@
+<!doctype html>
+<!-- Песочница: здесь живёт Vosk. Обычным extension-страницам MV3 запрещены
+     blob-воркеры (vosk-browser создаёт воркер из blob-URL), а sandbox-страницам
+     можно задать свой CSP. Общение с content-скриптом — через postMessage. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <script src="lib/vosk.js"></script>
+    <script src="sandbox.js"></script>
+  </body>
+</html>

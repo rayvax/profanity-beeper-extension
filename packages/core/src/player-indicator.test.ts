@@ -40,27 +40,46 @@ describe('PlayerIndicator', () => {
     indicator.setState('working');
 
     expect(target.querySelectorAll(INDICATOR_SELECTOR)).toHaveLength(1);
-    expect(existing.textContent).toBe('🧼');
+    expect(existing.querySelector('svg')).not.toBeNull();
   });
 
-  test('setState updates text and title for each state', () => {
+  test('setState renders a logo-family SVG and title for each state', () => {
     const indicator = new PlayerIndicator();
     indicator.mount(target);
 
     indicator.setState('loading');
     let element = target.querySelector(INDICATOR_SELECTOR);
-    expect(element?.textContent).toBe('⏳');
+    expect(element?.querySelector('svg')).not.toBeNull();
+    expect(element?.innerHTML).not.toContain('#EE2B2E');
+    expect(element?.innerHTML).toContain('<animate');
     expect(element?.getAttribute('title')).toBe('Beeper loading captions...');
 
     indicator.setState('working');
     element = target.querySelector(INDICATOR_SELECTOR);
-    expect(element?.textContent).toBe('🧼');
+    expect(element?.querySelector('svg')).not.toBeNull();
+    expect(element?.innerHTML).toContain('#EE2B2E');
     expect(element?.getAttribute('title')).toBe('App is working');
 
     indicator.setState('error');
     element = target.querySelector(INDICATOR_SELECTOR);
-    expect(element?.textContent).toBe('⚠️');
+    expect(element?.querySelector('svg')).not.toBeNull();
+    expect(element?.innerHTML).toContain('stroke="#EE2B2E"');
     expect(element?.getAttribute('title')).toBe('Beeper failed to bind captions');
+  });
+
+  test('each state renders a distinct SVG', () => {
+    const indicator = new PlayerIndicator();
+    indicator.mount(target);
+    const element = target.querySelector(INDICATOR_SELECTOR);
+
+    indicator.setState('loading');
+    const loading = element?.innerHTML;
+    indicator.setState('working');
+    const working = element?.innerHTML;
+    indicator.setState('error');
+    const error = element?.innerHTML;
+
+    expect(new Set([loading, working, error]).size).toBe(3);
   });
 
   test('setState is no-op when not mounted', () => {

@@ -1,0 +1,338 @@
+import { acquireMediaGraph } from './media-graph';
+import type { CensorEffectValue, CensorRange } from '@beeper/core';
+import { CensorWindowScheduler, type CensorAudioWindow } from './censor-window-scheduler';
+
+export type PcmAudioInput = {
+  readonly sampleRate: Promise<number>;
+  subscribe(listener: (pcm: ArrayBuffer) => void): () => void;
+};
+
+export type DelayedCensoredPlaybackOptions = {
+  delaySeconds: number;
+  effect: CensorEffectValue;
+  workletUrl: string;
+  paddingSeconds?: number;
+  provisionalPaddingSeconds?: number;
+  mergeGapSeconds?: number;
+};
+
+type PlaybackGraph = {
+  context: AudioContext;
+  media: HTMLMediaElement;
+  source: MediaElementAudioSourceNode;
+  delay: DelayNode;
+  tap?: AudioNode;
+  active: boolean;
+  endedAt?: number;
+  windows: ScheduledCensorWindow[];
+  scheduler: CensorWindowScheduler;
+};
+
+type ScheduledCensorWindow = CensorAudioWindow & {
+  final?: boolean;
+  token?: string;
+};
+
+const DEFAULT_PADDING_SECONDS = 0.15;
+const DEFAULT_PROVISIONAL_PADDING_SECONDS = 0.02;
+const DEFAULT_MERGE_GAP_SECONDS = 0.05;
+const MIN_WINDOW_SECONDS = 0.05;
+
+/**
+ * Delivers the viewer-facing audio late enough for local recognition to
+ * schedule a shared beep-or-silence effect before the matching word arrives.
+ */
+export class DelayedCensoredPlayback {
+  readonly audioInput: PcmAudioInput;
+  private readonly currentOptions: DelayedCensoredPlaybackOptions;
+  private readonly listeners = new Set<(pcm: ArrayBuffer) => void>();
+  private sampleRatePromise = createPendingPromise<number>();
+  private graph: PlaybackGraph | undefined;
+  private listeningTo: HTMLMediaElement | undefined;
+  private ownsSuspension = false;
+  private readonly failureListeners = new Set<(error: unknown) => void>();
+
+  constructor(
+    private readonly getMedia: () => HTMLMediaElement | null,
+    options: DelayedCensoredPlaybackOptions,
+  ) {
+    this.currentOptions = { ...options };
+    this.audioInput = new DelayedPlaybackAudioInput(
+      () => this.sampleRatePromise.promise,
+      this.listeners,
+    );
+  }
+
+  updateOptions(
+    nextOptions: Pick<DelayedCensoredPlaybackOptions, 'delaySeconds' | 'effect'>,
+  ): void {
+    const delayDelta = nextOptions.delaySeconds - this.currentOptions.delaySeconds;
+    this.currentOptions.delaySeconds = nextOptions.delaySeconds;
+    this.currentOptions.effect = nextOptions.effect;
+    if (this.graph?.active) {
+      const now = this.graph.context.currentTime;
+      setDelay(this.graph.delay, this.graph.context, this.currentOptions.delaySeconds);
+      this.graph.windows = this.graph.windows
+        .filter((window) => window.end > now)
+        .map((window) => ({
+          ...window,
+          start: window.start + delayDelta,
+          end: window.end + delayDelta,
+        }));
+      this.graph.scheduler.replace(this.graph.windows, this.currentOptions.effect);
+    }
+  }
+
+  async arm(): Promise<void> {
+    const media = this.getMedia();
+    if (!media) throw new Error('Player media not found');
+
+    if (this.graph?.media !== media) {
+      this.graph = await createGraph(media, this.currentOptions, this.listeners);
+    } else if (!this.graph.active) {
+      setDelay(this.graph.delay, this.graph.context, this.currentOptions.delaySeconds);
+      this.graph.active = true;
+      this.graph.tap = await createTap(
+        this.graph.context,
+        this.currentOptions.workletUrl,
+        this.listeners,
+      );
+      this.graph.source.connect(this.graph.tap);
+    }
+
+    this.detachPlaybackListeners();
+    this.listeningTo = media;
+    media.addEventListener('pause', this.onPause);
+    media.addEventListener('play', this.onPlay);
+    media.addEventListener('ended', this.onEnded);
+    this.graph.endedAt = media.ended ? this.graph.context.currentTime : undefined;
+    if (media.paused && !media.ended) {
+      this.ownsSuspension = true;
+      await this.graph.context.suspend();
+    } else if (this.graph.context.state === 'suspended') {
+      await this.graph.context.resume();
+    }
+    this.sampleRatePromise.resolve(this.graph.context.sampleRate);
+  }
+
+  async execute(range: CensorRange): Promise<void> {
+    if (!this.graph?.active) {
+      throw new Error('Delayed playback is not armed');
+    }
+    scheduleCensorRange(this.graph, range, this.currentOptions);
+  }
+
+  stop(): void {
+    this.detachPlaybackListeners();
+    this.listeners.clear();
+    this.sampleRatePromise = createPendingPromise<number>();
+    if (!this.graph) return;
+
+    disconnectTap(this.graph);
+    this.graph.delay.delayTime.cancelScheduledValues(this.graph.context.currentTime);
+    this.graph.delay.delayTime.setValueAtTime(0, this.graph.context.currentTime);
+    this.graph.windows = [];
+    this.graph.endedAt = undefined;
+    this.graph.scheduler.stop();
+    this.graph.active = false;
+    // The graph is shared with caption mode and ordinary playback. Release
+    // our suspension even when suspend() has not resolved yet.
+    if (this.ownsSuspension) {
+      this.ownsSuspension = false;
+      void this.graph.context.resume().catch((error: unknown) => this.reportError(error));
+    }
+  }
+
+  onError(listener: (error: unknown) => void): () => void {
+    this.failureListeners.add(listener);
+    return () => this.failureListeners.delete(listener);
+  }
+
+  private readonly onPause = (): void => {
+    if (this.graph?.media.ended) this.onEnded();
+    else this.setPaused(true);
+  };
+  private readonly onPlay = (): void => {
+    if (this.graph) this.graph.endedAt = undefined;
+    this.setPaused(false);
+  };
+  private readonly onEnded = (): void => {
+    if (!this.graph?.active) return;
+    // Keep the delay buffer and censor windows intact while the final audio
+    // drains. Resume also releases a suspension queued by the preceding pause.
+    this.graph.endedAt ??= this.graph.context.currentTime;
+    this.setPaused(false);
+  };
+
+  private setPaused(paused: boolean): void {
+    const graph = this.graph;
+    if (!graph?.active) return;
+    this.ownsSuspension ||= paused;
+    // Freeze the context clock as well as its DelayNode buffer and scheduled
+    // censor effects; muting alone would drain the buffer during the pause.
+    const change = paused ? graph.context.suspend() : graph.context.resume();
+    void change.catch((error: unknown) => {
+      if (this.graph !== graph || !graph.active) return;
+      this.stop();
+      this.reportError(error);
+    });
+  }
+
+  private reportError(error: unknown): void {
+    this.failureListeners.forEach((listener) => listener(error));
+  }
+
+  private detachPlaybackListeners(): void {
+    this.listeningTo?.removeEventListener('pause', this.onPause);
+    this.listeningTo?.removeEventListener('play', this.onPlay);
+    this.listeningTo?.removeEventListener('ended', this.onEnded);
+    this.listeningTo = undefined;
+  }
+}
+
+class DelayedPlaybackAudioInput implements PcmAudioInput {
+  constructor(
+    private readonly getSampleRate: () => Promise<number>,
+    private readonly listeners: Set<(pcm: ArrayBuffer) => void>,
+  ) {}
+
+  get sampleRate(): Promise<number> {
+    return this.getSampleRate();
+  }
+
+  subscribe(listener: (pcm: ArrayBuffer) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+}
+
+async function createGraph(
+  media: HTMLMediaElement,
+  options: DelayedCensoredPlaybackOptions,
+  listeners: Set<(pcm: ArrayBuffer) => void>,
+): Promise<PlaybackGraph> {
+  const shared = await acquireMediaGraph(media);
+  const { context } = shared;
+  setDelay(shared.delay, context, options.delaySeconds);
+  let tap: AudioNode;
+  try {
+    tap = await createTap(context, options.workletUrl, listeners);
+  } catch (error) {
+    // The shared graph already routes the media at this point. Restore its
+    // pass-through state before surfacing the arm failure.
+    setDelay(shared.delay, context, 0);
+    shared.gain.gain.cancelScheduledValues(context.currentTime);
+    shared.gain.gain.setValueAtTime(1, context.currentTime);
+    throw error;
+  }
+  shared.source.connect(tap);
+  return {
+    context,
+    media,
+    source: shared.source,
+    delay: shared.delay,
+    tap,
+    active: true,
+    windows: [],
+    scheduler: new CensorWindowScheduler(
+      context,
+      shared.gain,
+      options.mergeGapSeconds ?? DEFAULT_MERGE_GAP_SECONDS,
+    ),
+  };
+}
+
+function setDelay(delay: DelayNode, context: AudioContext, seconds: number): void {
+  delay.delayTime.cancelScheduledValues(context.currentTime);
+  delay.delayTime.setValueAtTime(seconds, context.currentTime);
+}
+
+function disconnectTap(graph: PlaybackGraph): void {
+  if (!graph.tap) return;
+  // The tap is fed from the shared source node; drop both ends of the link.
+  try {
+    graph.source.disconnect(graph.tap);
+  } catch {
+    // Already disconnected.
+  }
+  graph.tap.disconnect();
+  graph.tap = undefined;
+}
+
+async function createTap(
+  context: AudioContext,
+  workletUrl: string,
+  listeners: Set<(pcm: ArrayBuffer) => void>,
+): Promise<AudioNode> {
+  try {
+    await context.audioWorklet.addModule(workletUrl);
+    const tap = new AudioWorkletNode(context, 'bleep-tap', {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+      channelCount: 1,
+      channelCountMode: 'explicit',
+    });
+    tap.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+      listeners.forEach((listener) => listener(event.data));
+    };
+    return tap;
+  } catch {
+    const tap = context.createScriptProcessor(4_096, 1, 1);
+    tap.onaudioprocess = (event) => {
+      const pcm = event.inputBuffer.getChannelData(0).slice().buffer;
+      listeners.forEach((listener) => listener(pcm.slice(0)));
+    };
+    const silentSink = context.createGain();
+    silentSink.gain.value = 0;
+    tap.connect(silentSink);
+    silentSink.connect(context.destination);
+    return tap;
+  }
+}
+
+function scheduleCensorRange(
+  graph: PlaybackGraph,
+  range: CensorRange,
+  options: DelayedCensoredPlaybackOptions,
+): void {
+  const now = graph.context.currentTime;
+  // Media time stops at the end, but the delayed audio clock keeps advancing.
+  const timelineNow = graph.endedAt ?? now;
+  const padding =
+    range.final === false
+      ? (options.provisionalPaddingSeconds ?? DEFAULT_PROVISIONAL_PADDING_SECONDS)
+      : (options.paddingSeconds ?? DEFAULT_PADDING_SECONDS);
+  const playbackRate = graph.media.playbackRate || 1;
+  const start = Math.max(
+    now + 0.005,
+    timelineNow +
+      (range.startTime - graph.media.currentTime) / playbackRate +
+      options.delaySeconds -
+      padding,
+  );
+  const end = Math.max(
+    start + MIN_WINDOW_SECONDS,
+    timelineNow +
+      (range.endTime - graph.media.currentTime) / playbackRate +
+      options.delaySeconds +
+      padding,
+  );
+  const pending = graph.windows.filter((window) => window.end >= now);
+  graph.windows =
+    range.final && range.token
+      ? pending.filter((window) => window.final !== false || window.token !== range.token)
+      : pending;
+  graph.windows.push({ start, end, final: range.final, token: range.token });
+  graph.scheduler.replace(graph.windows, options.effect);
+}
+
+function createPendingPromise<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolvePromise: (value: T) => void = () => {};
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: resolvePromise };
+}

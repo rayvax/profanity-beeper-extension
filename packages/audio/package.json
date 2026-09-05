@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@beeper/core": "workspace:*"
+  },
   "scripts": {
     "type-check": "tsc -p tsconfig.json",
     "test": "bun test"

@@ -1,17 +1,60 @@
+import type { CensorSettings } from './settings';
+
 export const MessageType = {
-  CHUNK_CAPTURED: 'CHUNK_CAPTURED',
   CHUNK_CENSORED: 'CHUNK_CENSORED',
+  GET_CENSOR_SETTINGS: 'GET_CENSOR_SETTINGS',
+  UPDATE_CENSOR_SETTINGS: 'UPDATE_CENSOR_SETTINGS',
+  CENSOR_SETTINGS_UPDATED: 'CENSOR_SETTINGS_UPDATED',
+  CENSOR_STATUS_UPDATED: 'CENSOR_STATUS_UPDATED',
+  GET_CENSOR_STATUS: 'GET_CENSOR_STATUS',
+  ML_TRANSCRIPT_UPDATED: 'ML_TRANSCRIPT_UPDATED',
 } as const;
 
+export const CensorStatus = {
+  WAITING: 'waiting',
+  WORKING: 'working',
+  ERROR: 'error',
+} as const;
+
+export type CensorStatusValue = (typeof CensorStatus)[keyof typeof CensorStatus];
+
 export type MessageMap = {
-  [MessageType.CHUNK_CAPTURED]: {
-    request: { text: string };
-    response: { ok: true; censored: boolean } | { ok: false; error: string };
-  };
   [MessageType.CHUNK_CENSORED]: {
     request: { text: string };
     response: void;
   };
+  [MessageType.GET_CENSOR_SETTINGS]: {
+    request: Record<string, never>;
+    response: { settings: CensorSettings };
+  };
+  [MessageType.UPDATE_CENSOR_SETTINGS]: {
+    request: { settings: CensorSettings };
+    response: { ok: true; settings: CensorSettings } | { ok: false; error: string };
+  };
+  [MessageType.CENSOR_SETTINGS_UPDATED]: {
+    request: { settings: CensorSettings };
+    response: void;
+  };
+  [MessageType.CENSOR_STATUS_UPDATED]: {
+    request: { status: CensorStatusValue; tabId?: number };
+    response: void;
+  };
+  [MessageType.GET_CENSOR_STATUS]: {
+    request: { tabId: number };
+    response: { status?: CensorStatusValue };
+  };
+  [MessageType.ML_TRANSCRIPT_UPDATED]: {
+    request: { entry: MlTranscriptEntry };
+    response: void;
+  };
+};
+
+export type MlTranscriptEntry = {
+  text: string;
+  startTime?: number;
+  endTime?: number;
+  final: boolean;
+  censored: boolean;
 };
 
 export type MessageTypeValue = keyof MessageMap;
@@ -28,7 +71,6 @@ export type ExtensionMessage = {
   [K in MessageTypeValue]: RequestOf<K>;
 }[MessageTypeValue];
 
-export type ChunkCapturedMessage = RequestOf<typeof MessageType.CHUNK_CAPTURED>;
 export type ChunkCensoredMessage = RequestOf<typeof MessageType.CHUNK_CENSORED>;
 
 export function isMessageOfType<T extends MessageTypeValue>(
