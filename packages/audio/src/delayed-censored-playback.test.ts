@@ -67,6 +67,50 @@ describe('DelayedCensoredPlayback', () => {
     globalThis.AudioContext = originalAudioContext as typeof AudioContext;
   });
 
+  test.each([true, false])(
+    'drains censored audio after pause then ended (ended at pause: %s)',
+    async (endedAtPause) => {
+      const media = Object.assign(new EventTarget(), {
+        currentTime: 10,
+        paused: false,
+        ended: false,
+        playbackRate: 1,
+      }) as HTMLMediaElement;
+      const playback = new DelayedCensoredPlayback(() => media, {
+        delaySeconds: 1.2,
+        effect: 'beep',
+        workletUrl: 'test.js',
+      });
+      await playback.arm();
+      await playback.execute({ startTime: 9.8, endTime: 10, final: false, token: 'bad' });
+      context.delay.delayTime.setValueAtTime.mockClear();
+      context.gain.gain.cancelScheduledValues.mockClear();
+      Object.assign(media, { paused: true, ended: endedAtPause });
+      media.dispatchEvent(new Event('pause'));
+      Object.assign(media, { ended: true });
+      media.dispatchEvent(new Event('ended'));
+      if (endedAtPause) expect(context.suspend).not.toHaveBeenCalled();
+      expect(context.resume.mock.calls.length).toBeGreaterThan(1);
+      expect(context.delay.delayTime.setValueAtTime).not.toHaveBeenCalled();
+      expect(context.gain.gain.cancelScheduledValues).not.toHaveBeenCalled();
+
+      // Recognition may confirm the last word while the delayed tail is draining.
+      context.currentTime = 10.4;
+      await playback.execute({ startTime: 9.8, endTime: 10, final: true, token: 'bad' });
+      expect(context.gain.gain.linearRampToValueAtTime.mock.calls.at(-1)?.[1]).toBeCloseTo(11.36);
+      Object.assign(media, { ended: false, paused: false, currentTime: 0 });
+      media.dispatchEvent(new Event('play'));
+      await playback.execute({ startTime: 0, endTime: 0.1 });
+      expect(context.gain.gain.linearRampToValueAtTime.mock.calls.at(-1)?.[1]).toBeCloseTo(11.86);
+      playback.stop();
+      context.resume.mockClear();
+      media.dispatchEvent(new Event('ended'));
+      media.dispatchEvent(new Event('play'));
+      expect(context.resume).not.toHaveBeenCalled();
+      await expect(playback.execute({ startTime: 0, endTime: 1 })).rejects.toThrow('not armed');
+    },
+  );
+
   test('freezes buffered audio immediately on pause and resumes the same buffer', async () => {
     const media = Object.assign(new EventTarget(), {
       currentTime: 10,

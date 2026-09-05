@@ -23,6 +23,7 @@ type PlaybackGraph = {
   delay: DelayNode;
   tap?: AudioNode;
   active: boolean;
+  endedAt?: number;
   windows: ScheduledCensorWindow[];
   scheduler: CensorWindowScheduler;
 };
@@ -103,7 +104,9 @@ export class DelayedCensoredPlayback {
     this.listeningTo = media;
     media.addEventListener('pause', this.onPause);
     media.addEventListener('play', this.onPlay);
-    if (media.paused) {
+    media.addEventListener('ended', this.onEnded);
+    this.graph.endedAt = media.ended ? this.graph.context.currentTime : undefined;
+    if (media.paused && !media.ended) {
       this.ownsSuspension = true;
       await this.graph.context.suspend();
     } else if (this.graph.context.state === 'suspended') {
@@ -129,6 +132,7 @@ export class DelayedCensoredPlayback {
     this.graph.delay.delayTime.cancelScheduledValues(this.graph.context.currentTime);
     this.graph.delay.delayTime.setValueAtTime(0, this.graph.context.currentTime);
     this.graph.windows = [];
+    this.graph.endedAt = undefined;
     this.graph.scheduler.stop();
     this.graph.active = false;
     // The graph is shared with caption mode and ordinary playback. Release
@@ -144,8 +148,21 @@ export class DelayedCensoredPlayback {
     return () => this.failureListeners.delete(listener);
   }
 
-  private readonly onPause = (): void => this.setPaused(true);
-  private readonly onPlay = (): void => this.setPaused(false);
+  private readonly onPause = (): void => {
+    if (this.graph?.media.ended) this.onEnded();
+    else this.setPaused(true);
+  };
+  private readonly onPlay = (): void => {
+    if (this.graph) this.graph.endedAt = undefined;
+    this.setPaused(false);
+  };
+  private readonly onEnded = (): void => {
+    if (!this.graph?.active) return;
+    // Keep the delay buffer and censor windows intact while the final audio
+    // drains. Resume also releases a suspension queued by the preceding pause.
+    this.graph.endedAt ??= this.graph.context.currentTime;
+    this.setPaused(false);
+  };
 
   private setPaused(paused: boolean): void {
     const graph = this.graph;
@@ -168,6 +185,7 @@ export class DelayedCensoredPlayback {
   private detachPlaybackListeners(): void {
     this.listeningTo?.removeEventListener('pause', this.onPause);
     this.listeningTo?.removeEventListener('play', this.onPlay);
+    this.listeningTo?.removeEventListener('ended', this.onEnded);
     this.listeningTo = undefined;
   }
 }
@@ -278,6 +296,8 @@ function scheduleCensorRange(
   options: DelayedCensoredPlaybackOptions,
 ): void {
   const now = graph.context.currentTime;
+  // Media time stops at the end, but the delayed audio clock keeps advancing.
+  const timelineNow = graph.endedAt ?? now;
   const padding =
     range.final === false
       ? (options.provisionalPaddingSeconds ?? DEFAULT_PROVISIONAL_PADDING_SECONDS)
@@ -285,14 +305,17 @@ function scheduleCensorRange(
   const playbackRate = graph.media.playbackRate || 1;
   const start = Math.max(
     now + 0.005,
-    now +
+    timelineNow +
       (range.startTime - graph.media.currentTime) / playbackRate +
       options.delaySeconds -
       padding,
   );
   const end = Math.max(
     start + MIN_WINDOW_SECONDS,
-    now + (range.endTime - graph.media.currentTime) / playbackRate + options.delaySeconds + padding,
+    timelineNow +
+      (range.endTime - graph.media.currentTime) / playbackRate +
+      options.delaySeconds +
+      padding,
   );
   const pending = graph.windows.filter((window) => window.end >= now);
   graph.windows =
