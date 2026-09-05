@@ -18,7 +18,7 @@ export { BUNDLED_MATCH_CONFIG } from './match-config';
 export { PlayerIndicator } from './player-indicator';
 export type { PlayerIndicatorState } from './player-indicator';
 export { createCensorRanges } from './censor';
-export type { CensorExecutor, CensorRange } from './censor';
+export type { CensorActivation, CensorExecutor, CensorRange } from './censor';
 export {
   CensorEffect,
   CensorSource,

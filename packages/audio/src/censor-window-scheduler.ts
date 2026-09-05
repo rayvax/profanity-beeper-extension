@@ -1,4 +1,5 @@
-import { scheduleCensorEffect, type CensorAudioEffectValue } from './censor-effect';
+import type { CensorEffectValue } from '@beeper/core';
+import { scheduleCensorEffect } from './censor-effect';
 
 export type CensorAudioWindow = {
   start: number;
@@ -15,7 +16,7 @@ const DEFAULT_MERGE_GAP_SECONDS = 0.05;
 export class CensorWindowScheduler {
   private oscillators: Array<{ window: CensorAudioWindow; node: OscillatorNode }> = [];
   private currentWindows: CensorAudioWindow[] = [];
-  private currentEffect: CensorAudioEffectValue | undefined;
+  private currentEffect: CensorEffectValue | undefined;
 
   constructor(
     private readonly context: AudioContext,
@@ -23,7 +24,7 @@ export class CensorWindowScheduler {
     private readonly mergeGapSeconds = DEFAULT_MERGE_GAP_SECONDS,
   ) {}
 
-  replace(windows: CensorAudioWindow[], effect: CensorAudioEffectValue): void {
+  replace(windows: CensorAudioWindow[], effect: CensorEffectValue): void {
     const now = this.context.currentTime;
     const merged = mergeCensorWindows(
       windows.filter((window) => window.end > now),

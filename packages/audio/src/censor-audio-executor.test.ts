@@ -88,6 +88,29 @@ describe('CensorAudioExecutor', () => {
     expect(context.createMediaElementSource).not.toHaveBeenCalled();
   });
 
+  test('reports scheduling errors from media events after restoring normal audio', async () => {
+    const media = createMedia(12);
+    const executor = new CensorAudioExecutor(() => media);
+    const failure = new Error('audio scheduling failed');
+    const onError = mock(() => {
+      expect(context.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(1, context.currentTime);
+    });
+    const unsubscribe = executor.onError(onError);
+    await executor.execute({ startTime: 12, endTime: 14 });
+    context.gain.gain.linearRampToValueAtTime.mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    media.dispatchEvent(new Event('ratechange'));
+
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(onError).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    media.dispatchEvent(new Event('ratechange'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    executor.stop();
+  });
+
   test('keeps original audio muted through overlapping ranges', async () => {
     const media = createMedia(12);
     const executor = new CensorAudioExecutor(() => media);

@@ -1,13 +1,13 @@
-import { CensorAudioEffect, type CensorAudioEffectValue } from './censor-effect';
+import {
+  CensorEffect,
+  type CensorEffectValue,
+  type CensorRange,
+  type CensorExecutor,
+} from '@beeper/core';
 import { CensorWindowScheduler, type CensorAudioWindow } from './censor-window-scheduler';
 import { acquireMediaGraph } from './media-graph';
 
-export type MediaTimelineRange = {
-  startTime: number;
-  endTime: number;
-};
-
-export type CensorAudioOptions = { effect?: CensorAudioEffectValue };
+export type CensorAudioOptions = { effect?: CensorEffectValue };
 
 type PlaybackGraph = {
   context: AudioContext;
@@ -16,12 +16,15 @@ type PlaybackGraph = {
 };
 
 type ScheduledRange = {
-  range: MediaTimelineRange;
+  range: CensorRange;
   timer?: ReturnType<typeof setTimeout>;
 };
 
-export class CensorAudioExecutor {
-  private effect: CensorAudioEffectValue;
+export class CensorAudioExecutor implements CensorExecutor {
+  readonly activation = { kind: 'on-execute' } as const;
+  private readonly failureListeners = new Set<(error: unknown) => void>();
+
+  private effect: CensorEffectValue;
   private graph: PlaybackGraph | undefined;
   private pendingGraph: { media: HTMLMediaElement; promise: Promise<PlaybackGraph> } | undefined;
   private readonly scheduledRanges = new Set<ScheduledRange>();
@@ -34,7 +37,7 @@ export class CensorAudioExecutor {
     private readonly getMedia: () => HTMLMediaElement | null,
     options: CensorAudioOptions = {},
   ) {
-    this.effect = options.effect ?? CensorAudioEffect.BEEP;
+    this.effect = options.effect ?? CensorEffect.BEEP;
     this.playbackListeners = {
       reschedule: () => this.reschedule(),
       suspend: () => {
@@ -49,8 +52,13 @@ export class CensorAudioExecutor {
   }
 
   updateOptions(nextOptions: CensorAudioOptions): void {
-    this.effect = nextOptions.effect ?? CensorAudioEffect.BEEP;
+    this.effect = nextOptions.effect ?? CensorEffect.BEEP;
     this.reschedule();
+  }
+
+  onError(listener: (error: unknown) => void): () => void {
+    this.failureListeners.add(listener);
+    return () => this.failureListeners.delete(listener);
   }
 
   async arm(): Promise<void> {
@@ -64,7 +72,7 @@ export class CensorAudioExecutor {
     this.reschedule();
   }
 
-  async execute(range: MediaTimelineRange): Promise<void> {
+  async execute(range: CensorRange): Promise<void> {
     const media = this.getMedia();
     if (!media) throw new Error('Player media not found');
     const executeGeneration = this.generation;
@@ -98,6 +106,15 @@ export class CensorAudioExecutor {
   }
 
   private reschedule(): void {
+    try {
+      this.rescheduleWindows();
+    } catch (error) {
+      this.stop();
+      this.failureListeners.forEach((listener) => listener(error));
+    }
+  }
+
+  private rescheduleWindows(): void {
     this.scheduledRanges.forEach((scheduledRange) => clearTimeout(scheduledRange.timer));
     const currentGraph = this.graph;
     if (!currentGraph || currentGraph.media.paused || this.waitingForPlayback) {

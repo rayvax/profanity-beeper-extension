@@ -1,13 +1,6 @@
 import { acquireMediaGraph } from './media-graph';
-import type { CensorAudioEffectValue } from './censor-effect';
+import type { CensorEffectValue, CensorRange } from '@beeper/core';
 import { CensorWindowScheduler, type CensorAudioWindow } from './censor-window-scheduler';
-
-export type DelayedCensorRange = {
-  startTime: number;
-  endTime: number;
-  final?: boolean;
-  token?: string;
-};
 
 export type PcmAudioInput = {
   readonly sampleRate: Promise<number>;
@@ -16,7 +9,7 @@ export type PcmAudioInput = {
 
 export type DelayedCensoredPlaybackOptions = {
   delaySeconds: number;
-  effect: CensorAudioEffectValue;
+  effect: CensorEffectValue;
   workletUrl: string;
   paddingSeconds?: number;
   provisionalPaddingSeconds?: number;
@@ -109,7 +102,7 @@ export class DelayedCensoredPlayback {
     this.sampleRatePromise.resolve(this.graph.context.sampleRate);
   }
 
-  async execute(range: DelayedCensorRange): Promise<void> {
+  async execute(range: CensorRange): Promise<void> {
     if (!this.graph?.active) {
       throw new Error('Delayed playback is not armed');
     }
@@ -232,7 +225,7 @@ async function createTap(
 
 function scheduleCensorRange(
   graph: PlaybackGraph,
-  range: DelayedCensorRange,
+  range: CensorRange,
   options: DelayedCensoredPlaybackOptions,
 ): void {
   const now = graph.context.currentTime;

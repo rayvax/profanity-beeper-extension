@@ -67,7 +67,7 @@ Do not consider the job done until all checks pass.
 @beeper/adapter-vosk-content   →  speech, vosk
 @beeper/youtube                →  core
 @beeper/vosk                   →  speech
-@beeper/audio                  →  (none)
+@beeper/audio                  →  core
 @beeper/speech                 →  (none)
 @beeper/core                   →  (none)
 ```

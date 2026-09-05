@@ -11,9 +11,15 @@ export type CensorRange = {
 };
 
 export type CensorExecutor = {
+  readonly activation: CensorActivation;
   execute(range: CensorRange): void | Promise<void>;
-  stop?(): void;
+  onError(listener: (error: unknown) => void): () => void;
+  stop(): void;
 };
+
+export type CensorActivation =
+  | { readonly kind: 'on-execute' }
+  | { readonly kind: 'on-interaction'; arm(): void | Promise<void> };
 
 export function createCensorRanges(chunk: TranscriptChunk, matcher: ChunkMatcher): CensorRange[] {
   if (!hasMediaTimelineInterval(chunk)) {

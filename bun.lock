@@ -60,6 +60,9 @@
     "packages/audio": {
       "name": "@beeper/audio",
       "version": "0.0.0",
+      "dependencies": {
+        "@beeper/core": "workspace:*",
+      },
     },
     "packages/core": {
       "name": "@beeper/core",

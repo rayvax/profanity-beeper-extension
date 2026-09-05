@@ -11,7 +11,19 @@ import {
 
 import { YoutubeEvent } from '@beeper/youtube';
 
-import { startCaptionBeeper } from './caption-beeper';
+import {
+  startCaptionBeeper as createSession,
+  type TimedCensorSessionOptions,
+  type TranscriptBeeperSession,
+} from './caption-beeper';
+
+const sessions: TranscriptBeeperSession[] = [];
+
+function startCaptionBeeper(options: TimedCensorSessionOptions): TranscriptBeeperSession {
+  const session = createSession(options);
+  sessions.push(session);
+  return session;
+}
 
 const WATCH_URL = 'https://www.youtube.com/watch?v=test123';
 
@@ -45,17 +57,28 @@ class DeferredTranscriptSource implements TranscriptSource {
   }
 }
 
-class DeferredCensorExecutor implements CensorExecutor {
-  readonly rejecters: Array<(reason?: unknown) => void> = [];
-
-  execute(): Promise<void> {
-    return new Promise((_, reject) => this.rejecters.push(reject));
+class FakeCensorExecutor implements CensorExecutor {
+  readonly activation: CensorExecutor['activation'] = { kind: 'on-execute' };
+  readonly execute = mock(async () => {});
+  readonly stop = mock(() => {});
+  readonly listeners = new Set<(error: unknown) => void>();
+  onError(listener: (error: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 }
 
-class ArmableCensorExecutor implements CensorExecutor {
+class DeferredCensorExecutor extends FakeCensorExecutor {
+  readonly rejecters: Array<(reason?: unknown) => void> = [];
+
+  override readonly execute = mock(
+    (): Promise<void> => new Promise((_, reject) => this.rejecters.push(reject)),
+  );
+}
+
+class ArmableCensorExecutor extends FakeCensorExecutor {
+  override readonly activation = { kind: 'on-interaction', arm: () => this.arm() } as const;
   readonly arm = mock(async () => {});
-  readonly execute = mock(async () => {});
 }
 
 function badWordMatcher(): ChunkMatcher {
@@ -86,6 +109,7 @@ describe('startCaptionBeeper', () => {
   });
 
   afterEach(() => {
+    sessions.splice(0).forEach((session) => session.stop());
     console.error = originalConsoleError;
     document.body.innerHTML = '';
   });
@@ -95,7 +119,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(() => {}) },
+      executor: new FakeCensorExecutor(),
     });
 
     await flushMicrotasks();
@@ -105,7 +129,7 @@ describe('startCaptionBeeper', () => {
 
   test('executes Censor ranges through injected timed-session seams', async () => {
     const source = new FakeTranscriptSource();
-    const executor: CensorExecutor = { execute: mock(() => {}) };
+    const executor: CensorExecutor = new FakeCensorExecutor();
     const statuses: string[] = [];
     const onTranscript = mock(() => {});
 
@@ -132,12 +156,9 @@ describe('startCaptionBeeper', () => {
   test('restores playback before reporting an executor failure', async () => {
     const source = new FakeTranscriptSource();
     const stop = mock(() => {});
-    const executor: CensorExecutor = {
-      execute: async () => {
-        throw new Error('audio graph failed');
-      },
-      stop,
-    };
+    const executor = new FakeCensorExecutor();
+    executor.execute.mockRejectedValue(new Error('audio graph failed'));
+    executor.stop.mockImplementation(stop);
     const statuses: string[] = [];
     startCaptionBeeper({
       source,
@@ -163,7 +184,6 @@ describe('startCaptionBeeper', () => {
       source,
       matcher: cleanMatcher(),
       executor,
-      armOnInteraction: true,
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -178,9 +198,82 @@ describe('startCaptionBeeper', () => {
     expect(statuses).toEqual(['waiting', 'working']);
   });
 
-  test('does not gate timedtext playback on an interaction', async () => {
+  test('handles synchronous activation failure and stops the transcript', async () => {
     const source = new FakeTranscriptSource();
     const executor = new ArmableCensorExecutor();
+    executor.arm.mockImplementation(() => {
+      throw new Error('activation failed');
+    });
+    const statuses: string[] = [];
+    startCaptionBeeper({
+      source,
+      matcher: badWordMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
+    await flushMicrotasks();
+    executor.stop.mockClear();
+
+    document.dispatchEvent(new Event('pointerdown'));
+    await flushMicrotasks();
+    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['waiting', 'error']);
+    expect(source.stop).toHaveBeenCalledTimes(1);
+    expect(executor.stop).toHaveBeenCalledTimes(1);
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(executor.listeners.size).toBe(0);
+  });
+
+  test('does not report working when activation completes after stop', async () => {
+    const executor = new ArmableCensorExecutor();
+    const armed = Promise.withResolvers<void>();
+    executor.arm.mockImplementation(() => armed.promise);
+    const statuses: string[] = [];
+    const session = startCaptionBeeper({
+      source: new FakeTranscriptSource(),
+      matcher: cleanMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
+    await flushMicrotasks();
+    document.dispatchEvent(new Event('pointerdown'));
+    session.stop();
+    armed.resolve();
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['waiting']);
+    expect(executor.listeners.size).toBe(0);
+  });
+
+  test('restores playback on asynchronous executor errors and ignores later chunks', async () => {
+    const source = new FakeTranscriptSource();
+    const executor = new FakeCensorExecutor();
+    const statuses: string[] = [];
+    startCaptionBeeper({
+      source,
+      matcher: badWordMatcher(),
+      executor,
+      onStatus: (status) => statuses.push(status),
+    });
+    await flushMicrotasks();
+    executor.stop.mockClear();
+
+    executor.listeners.forEach((listener) => listener(new Error('renderer failed')));
+    source.lastBindOptions?.onChunk({ text: 'bad', startTime: 4, endTime: 5 });
+    await flushMicrotasks();
+
+    expect(statuses).toEqual(['waiting', 'working', 'error']);
+    expect(executor.stop).toHaveBeenCalledTimes(1);
+    expect(source.stop).toHaveBeenCalledTimes(1);
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(executor.listeners.size).toBe(0);
+  });
+
+  test('does not gate timedtext playback on an interaction', async () => {
+    const source = new FakeTranscriptSource();
+    const executor = new FakeCensorExecutor();
     const statuses: string[] = [];
     startCaptionBeeper({
       source,
@@ -190,7 +283,6 @@ describe('startCaptionBeeper', () => {
     });
     await flushMicrotasks();
 
-    expect(executor.arm).not.toHaveBeenCalled();
     expect(statuses).toEqual(['waiting', 'working']);
   });
 
@@ -200,7 +292,7 @@ describe('startCaptionBeeper', () => {
     const session = startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(async () => {}) },
+      executor: new FakeCensorExecutor(),
       updateSettings,
     });
     await flushMicrotasks();
@@ -220,7 +312,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(async () => {}), stop },
+      executor: Object.assign(new FakeCensorExecutor(), { stop }),
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -241,7 +333,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(async () => {}) },
+      executor: new FakeCensorExecutor(),
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -255,7 +347,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source: new AbortedTranscriptSource(),
       matcher: cleanMatcher(),
-      executor: { execute: mock(async () => {}) },
+      executor: new FakeCensorExecutor(),
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -268,7 +360,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(() => {}) },
+      executor: new FakeCensorExecutor(),
     });
     await flushMicrotasks();
 
@@ -286,7 +378,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(() => {}) },
+      executor: new FakeCensorExecutor(),
       onStatus: (status) => statuses.push(status),
     });
     await flushMicrotasks();
@@ -307,7 +399,7 @@ describe('startCaptionBeeper', () => {
     startCaptionBeeper({
       source,
       matcher: cleanMatcher(),
-      executor: { execute: mock(() => {}) },
+      executor: new FakeCensorExecutor(),
     });
     await flushMicrotasks();
 

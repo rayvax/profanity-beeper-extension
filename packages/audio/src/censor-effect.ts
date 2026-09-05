@@ -1,19 +1,14 @@
-export const CensorAudioEffect = {
-  BEEP: 'beep',
-  SILENCE: 'silence',
-} as const;
-
-export type CensorAudioEffectValue = (typeof CensorAudioEffect)[keyof typeof CensorAudioEffect];
+import { CensorEffect, type CensorEffectValue } from '@beeper/core';
 
 export function scheduleCensorEffect(
   context: AudioContext,
-  effect: CensorAudioEffectValue,
+  effect: CensorEffectValue,
   startTime: number,
   endTime: number,
   activeOscillator?: OscillatorNode,
   onEnded?: () => void,
 ): OscillatorNode | undefined {
-  if (effect === CensorAudioEffect.SILENCE) return undefined;
+  if (effect === CensorEffect.SILENCE) return undefined;
   if (activeOscillator) {
     activeOscillator.stop(endTime);
     return activeOscillator;
