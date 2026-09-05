@@ -4,18 +4,21 @@
 
 ## Repository purpose
 
-Bun monorepo for **Youtube Beeper** — a Manifest V3 Chrome extension that detects profanity in YouTube captions and signals the player (mute + flash). Offscreen audio beep support is wired but currently stubbed in the service worker (same as the source example).
+Bun monorepo for **SoapTheMouth** — a Manifest V3 Chrome extension that detects profanity in YouTube captions and signals the player (mute + flash). Offscreen audio beep support is wired but currently stubbed in the service worker (same as the source example).
 
 ## Structure
 
 | Path | Package | Role |
 |------|---------|------|
 | `apps/extension` | `@beeper/extension` | WXT app — Chrome API ports (`lib/chrome-*`), thin entrypoint wiring |
-| `packages/core` | `@beeper/core` | Message protocol, trigger-word matching, transcript seam, player indicator |
+| `packages/core` | `@beeper/core` | Message protocol, chunk matching, transcript seam, player indicator |
 | `packages/youtube` | `@beeper/youtube` | DOM transcript source, `signalPlayer` (no `chrome.*`) |
 | `packages/audio` | `@beeper/audio` | Web Audio beep (no `chrome.*`) |
+| `packages/speech` | `@beeper/speech` | Model-independent speech-recognition contract |
+| `packages/vosk` | `@beeper/vosk` | Local Vosk implementation and sandbox protocol |
 | `adapters/chrome-sw` | `@beeper/adapter-chrome-sw` | Service worker handlers, censor audio handler |
 | `adapters/chrome-content` | `@beeper/adapter-chrome-content` | Content script orchestration |
+| `adapters/vosk-content` | `@beeper/adapter-vosk-content` | Page-scoped Vosk recognizer lifecycle |
 
 Pure capabilities live in `packages/*` (no `chrome.*`). Orchestration lives in `adapters/*` (no `chrome.*`). Chrome APIs live in `apps/extension` only. Entrypoints wire adapters with injected messaging.
 
@@ -58,11 +61,14 @@ Do not consider the job done until all checks pass.
 ## Package dependency graph
 
 ```
-@beeper/extension              →  adapter-chrome-sw, adapter-chrome-content
+@beeper/extension              →  adapter-chrome-sw, adapter-chrome-content, adapter-vosk-content
 @beeper/adapter-chrome-sw      →  core, audio
-@beeper/adapter-chrome-content →  core, youtube
+@beeper/adapter-chrome-content →  core, youtube, audio, speech
+@beeper/adapter-vosk-content   →  speech, vosk
 @beeper/youtube                →  core
-@beeper/audio                  →  (none)
+@beeper/vosk                   →  speech
+@beeper/audio                  →  core
+@beeper/speech                 →  (none)
 @beeper/core                   →  (none)
 ```
 

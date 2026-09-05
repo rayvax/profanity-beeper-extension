@@ -1,4 +1,4 @@
-# Youtube Beeper
+# SoapTheMouth
 
 Chrome extension (Manifest V3) that watches YouTube captions for trigger words and signals the player — the video mutes briefly and the player flashes red. An offscreen audio beep can also play when a match is found.
 
@@ -43,7 +43,7 @@ WXT rebuilds on file changes. After a rebuild, use **Reload** on the extension c
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
 4. Select the `apps/extension/dist/chrome-mv3` folder (create it first with `bun run build` if it does not exist yet)
-5. Confirm **Youtube Beeper** appears in the extensions list
+5. Confirm **SoapTheMouth** appears in the extensions list
 
 To update after rebuilding, click the reload icon on the extension card.
 

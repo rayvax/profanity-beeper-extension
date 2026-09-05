@@ -11,7 +11,9 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@beeper/audio": "workspace:*",
     "@beeper/core": "workspace:*",
+    "@beeper/speech": "workspace:*",
     "@beeper/youtube": "workspace:*"
   }
 }

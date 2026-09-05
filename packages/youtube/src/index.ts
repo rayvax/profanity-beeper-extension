@@ -1,9 +1,12 @@
 export { CaptionSelector, PlayerSelector } from './selectors';
-export type { CaptionTrack } from './caption-track';
 export { DomTranscriptSource } from './dom-transcript-source';
-export { TimedTextTranscriptSource } from './timedtext-transcript-source';
+export { YoutubeTimedtextSource } from './timedtext-transcript-source';
+export type { YoutubeTimedtextSourceOptions } from './timedtext-transcript-source';
 export { YoutubeEvent } from './events';
 export { getVideoIdFromUrl } from './get-video-id-from-url';
 export { isWatchPage } from './is-watch-page';
 export { signalPlayer } from './signal-player';
+export { findPlayerMedia } from './player-media';
+export { DelayedVideoRenderer } from './delayed-video-renderer';
+export type { DelayedVideoRendererOptions } from './delayed-video-renderer';
 export { findElement, type FindElementOptions } from './shared';

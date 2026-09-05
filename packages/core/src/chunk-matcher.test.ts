@@ -68,6 +68,18 @@ describe('ChunkMatcher', () => {
       expected: false,
     },
     {
+      name: 'blocked term matches a token with edge punctuation',
+      config: { patterns: [], terms: ['дурак'] },
+      text: 'Ну и дурак!',
+      expected: true,
+    },
+    {
+      name: 'blocked term folds ё before matching',
+      config: { patterns: [], terms: ['ебаный'] },
+      text: 'Ёбаный',
+      expected: true,
+    },
+    {
       name: 'no match for clean text',
       config: censorTokenConfig,
       text: 'hello world',
@@ -106,5 +118,27 @@ describe('ChunkMatcher', () => {
 
     expect(matcher.matches('ok')).toBe(true);
     expect(warn).toHaveBeenCalled();
+  });
+
+  test('whitelist exempts a token from terms and patterns', () => {
+    const matcher = new ChunkMatcher({
+      terms: ['сука'],
+      patterns: ['^муд'],
+      whitelist: ['сука', 'мудила'],
+    });
+
+    expect(matcher.matches('Сука!')).toBe(false);
+    expect(matcher.matches('мудак')).toBe(true);
+    expect(matcher.matches('мудила')).toBe(false);
+  });
+
+  test('whitelist does not suppress a censor-token pattern match', () => {
+    const matcher = new ChunkMatcher({
+      patterns: censorTokenConfig.patterns,
+      terms: [],
+      whitelist: ['сука'],
+    });
+
+    expect(matcher.matches('[ __ ]')).toBe(true);
   });
 });
